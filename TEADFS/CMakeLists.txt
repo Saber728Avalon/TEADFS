@@ -7,7 +7,7 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINAR
 ### build kernel          ####
 ##############################
  
-set(KERNEL_DIR /usr/src/linux-headers-${CMAKE_SYSTEM_VERSION})
+set(KERNEL_DIR /lib/modules/${CMAKE_SYSTEM_VERSION}/build)
 set(SCENE_MODULE_NAME ${CMAKE_CURRENT_BINARY_DIR}/src/TEADFS.ko)
  
 add_custom_target(TEADFS ALL cp -f ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c ${CMAKE_CURRENT_BINARY_DIR}/src/
