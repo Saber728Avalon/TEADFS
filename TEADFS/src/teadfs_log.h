@@ -11,7 +11,7 @@ enum TEADFS_LOG_LEVEL {
 	TLL_CNT,
 };
 
-void teadfs_log(enum TEADFS_LOG_LEVEL level, char* func_name, int line, char* format, ...);
+void teadfs_log(enum TEADFS_LOG_LEVEL level, const char* func_name, int line, const char* format, ...);
 
 #define LOG_DBG(...) teadfs_log(TLL_DBG, __FUNCTION__, __LINE__, __VA_ARGS__); 
 #define LOG_INF(...) teadfs_log(TLL_INF, __FUNCTION__, __LINE__, __VA_ARGS__); 

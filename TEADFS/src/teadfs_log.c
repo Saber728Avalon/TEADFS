@@ -2,7 +2,7 @@
 
 #include <linux/stdlib.h>
 
-void teadfs_log(enum TEADFS_LOG_LEVEL level, char* func_name, int line, char* format, ...) {
+void teadfs_log(enum TEADFS_LOG_LEVEL level, const char* func_name, int line, const char* format, ...) {
 	va_list args;
 	va_start(args, format);
 	switch (level)

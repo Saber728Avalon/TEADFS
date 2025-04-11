@@ -2,132 +2,146 @@
 #include "mem.h"
 #include "teadfs_header.h"
 #include "lookup.h"
-
+#include "dentry.h"
+#include "super.h"
 
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/namei.h>
+#if CONFIG_BDICONFIG_BDI
+#include <linux/bdi.h>
+#endif
 
-/*
- * There is no need to lock the wrapfs_super_info's rwsem as there is no
- * way anyone can have a reference to the superblock at this point in time.
+/**
+ * teadfs_mount
+ * @fs_type
+ * @flags
+ * @dev_name: The path to mount over
+ * @raw_data: The options passed into the kernel
  */
-static int teadfs_read_super(struct super_block* sb, void* raw_data, int silent)
-{
-	int err = 0;
-	struct super_block* lower_sb;
-	struct path lower_path;
-	char* dev_name = (char*)raw_data;
-	struct inode* inode;
-
-	if (!dev_name) {
-		LOG_ERR("wrapfs: read_super: missing dev_name argument\n");
-		err = -EINVAL;
-		goto out;
-	}
-
-	/* parse lower path */
-	err = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY,
-		&lower_path);
-	if (err) {
-		LOG_ERR(""wrapfs: error accessing "
-			"lower directory '%s'\n", dev_name);
-		goto out;
-	}
-
-	/* allocate superblock private data */
-	sb->s_fs_info = teadfs_zalloc(sizeof(struct teadfs_sb_info), GFP_KERNEL);
-	if (!teadfs_get_super_block(sb)) {
-		printk(KERN_CRIT "wrapfs: read_super: out of memory\n");
-		err = -ENOMEM;
-		goto out_free;
-	}
-
-	/* set the lower superblock field of upper superblock */
-	lower_sb = lower_path.dentry->d_sb;
-	atomic_inc(&lower_sb->s_active);
-	teadfs_set_lower_super(sb, lower_sb);
-
-	/* inherit maxbytes from lower file system */
-	sb->s_maxbytes = lower_sb->s_maxbytes;
-
-	/*
-	 * Our c/m/atime granularity is 1 ns because we may stack on file
-	 * systems whose granularity is as good.
-	 */
-	sb->s_time_gran = 1;
-
-	sb->s_op = &wrapfs_sops;
-	sb->s_xattr = wrapfs_xattr_handlers;
-
-	sb->s_export_op = &wrapfs_export_ops; /* adding NFS support */
-
-	/* get a new inode and allocate our root dentry */
-	inode = teadfs_get_inode(d_inode(lower_path.dentry, sb);
-	if (IS_ERR(inode)) {
-		err = PTR_ERR(inode);
-		goto out_sput;
-	}
-	sb->s_root = d_make_root(inode);
-	if (!sb->s_root) {
-		err = -ENOMEM;
-		goto out_iput;
-	}
-	d_set_d_op(sb->s_root, &wrapfs_dops);
-
-	/* link the upper and lower dentries */
-	sb->s_root->d_fsdata = NULL;
-	err = new_dentry_private_data(sb->s_root);
-	if (err)
-		goto out_freeroot;
-
-	/* if get here: cannot have error */
-
-	/* set the lower dentries for s_root */
-	teadfs_set_lower_path(sb->s_root, &lower_path);
-
-	/*
-	 * No need to call interpose because we already have a positive
-	 * dentry, which was instantiated by d_make_root.  Just need to
-	 * d_rehash it.
-	 */
-	d_rehash(sb->s_root);
-	if (!silent)
-		LOG_ERR("wrapfs: mounted on top of %s type %s\n",
-			dev_name, lower_sb->s_type->name);
-	goto out; /* all is well */
-
-	/* no longer needed: free_dentry_private_data(sb->s_root); */
-out_freeroot:
-	dput(sb->s_root);
-out_iput:
-	iput(inode);
-out_sput:
-	/* drop refs we took earlier */
-	atomic_dec(&lower_sb->s_active);
-	kfree(WRAPFS_SB(sb));
-	sb->s_fs_info = NULL;
-out_free:
-	path_put(&lower_path);
-
-out:
-	return err;
-}
-
 static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
-    const char* dev_name, void* raw_data) {
-	int err = 0;
-	struct super_block* lower_sb;
-	struct path lower_path;
-	char* dev_name = (char*)raw_data;
+	const char* dev_name, void* raw_data)
+{
+	struct super_block* s = NULL;
+	struct teadfs_sb_info* sbi = NULL;
+	struct ecryptfs_mount_crypt_stat* mount_crypt_stat;
+	struct teadfs_dentry_info* root_info;
+	const char* err = "Getting sb failed";
 	struct inode* inode;
+	struct path path;
+	uid_t check_ruid;
+	int rc;
+	int release_path = 0;
 
-	void* lower_path_name = (void*)dev_name;
+	do {
+		sbi = teadfs_zalloc(sizeof(struct teadfs_sb_info), GFP_KERNEL);
+		if (!sbi) {
+			rc = -ENOMEM;
+			break;
+		}
+		s = sget(fs_type, NULL, set_anon_super, flags, NULL);
+		if (IS_ERR(s)) {
+			rc = PTR_ERR(s);
+			break;
+		}
+#if CONFIG_BDICONFIG_BDI
+		rc = bdi_setup_and_register(&sbi->bdi, "teadfs", BDI_CAP_MAP_COPY);
+#endif
+		if (rc)
+			break;
 
-	return mount_nodev(fs_type, flags, lower_path_name,
-		teadfs_read_super);
+		teadfs_set_lower_super(s, sbi);
+		s->s_bdi = &sbi->bdi;
+
+		/* ->kill_sb() will take care of sbi after that point */
+		sbi = NULL;
+		s->s_op = &ecryptfs_sops;
+		s->s_d_op = &ecryptfs_dops;
+
+		err = "Reading sb failed";
+		rc = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &path);
+		if (rc) {
+			LOG_ERR("kern_path() failed\n");
+			break;
+		}
+		release_path = 1;
+		if (path.dentry->d_sb->s_type == &ecryptfs_fs_type) {
+			rc = -EINVAL;
+			LOG_ERR("Mount on filesystem of type "
+				"eCryptfs explicitly disallowed due to "
+				"known incompatibilities\n");
+			break;
+		}
+
+		if (check_ruid && !uid_eq(path.dentry->d_inode->i_uid, current_uid())) {
+			rc = -EPERM;
+			LOG_ERR("Mount of device (uid: %d) not owned by "
+				"requested user (uid: %d)\n",
+				i_uid_read(path.dentry->d_inode),
+				from_kuid(&init_user_ns, current_uid()));
+			break;
+		}
+
+		ecryptfs_set_superblock_lower(s, path.dentry->d_sb);
+
+		/**
+		 * Set the POSIX ACL flag based on whether they're enabled in the lower
+		 * mount.
+		 */
+		s->s_flags = flags & ~MS_POSIXACL;
+		s->s_flags |= path.dentry->d_sb->s_flags & MS_POSIXACL;
+
+		/**
+		 * Force a read-only eCryptfs mount when:
+		 *   1) The lower mount is ro
+		 *   2) The ecryptfs_encrypted_view mount option is specified
+		 */
+		if (path.dentry->d_sb->s_flags & MS_RDONLY ||
+			mount_crypt_stat->flags & ECRYPTFS_ENCRYPTED_VIEW_ENABLED)
+			s->s_flags |= MS_RDONLY;
+
+		s->s_maxbytes = path.dentry->d_sb->s_maxbytes;
+		s->s_blocksize = path.dentry->d_sb->s_blocksize;
+		s->s_magic = ECRYPTFS_SUPER_MAGIC;
+
+		inode = teadfs_get_inode(path.dentry->d_inode, s);
+		rc = PTR_ERR(inode);
+		if (IS_ERR(inode))
+			break;
+
+		s->s_root = d_make_root(inode);
+		if (!s->s_root) {
+			rc = -ENOMEM;
+			break;
+		}
+
+		rc = -ENOMEM;
+		root_info = teadfs_zalloc(struct teadfs_dentry_info, GFP_KERNEL);
+		if (!root_info)
+			break;
+
+		/* ->kill_sb() will take care of root_info */
+		teadfs_set_dentry_private(s->s_root, root_info);
+		teadfs_set_dentry_lower(s->s_root, path);
+
+		s->s_flags |= MS_ACTIVE;
+		return dget(s->s_root);
+	} while (0);
+
+	if (release_path) {
+		path_put(&path);
+	}
+	if (s) {
+		deactivate_locked_super(s);
+	}
+	if (sbi) {
+		teadfs_free(sbi);
+	}
+	} while (0);
+	LOG_ERR("%s; rc = [%d]\n", err, rc);
+	return ERR_PTR(rc);
 }
 
 
@@ -146,7 +160,7 @@ static int __init my_module_init(void) {
     do {
         rc = register_filesystem(&teadfs_fs_type);
         if (rc) {
-            LOG_DBG("Failed to register filesystem\n");
+            LOG_ERR("Failed to register filesystem\n");
             break;
         }
     } while (0);
