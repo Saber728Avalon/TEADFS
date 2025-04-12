@@ -1,6 +1,6 @@
 #include "teadfs_log.h"
 
-#include <linux/stdlib.h>
+#include <linux/printk.h>
 
 void teadfs_log(enum TEADFS_LOG_LEVEL level, const char* func_name, int line, const char* format, ...) {
 	va_list args;
@@ -8,19 +8,20 @@ void teadfs_log(enum TEADFS_LOG_LEVEL level, const char* func_name, int line, co
 	switch (level)
 	{
 	case TLL_DBG:
-		printk("%s %d [dbg]" format, func_name, line,  args);
+		printk(format, func_name, line,  args);
 		break;
 	case TLL_INF:
-		printk("%s %d [INF]" format, func_name, line, args);
+		printk(format, func_name, line, args);
 		break;
 	case TLL_ERR:
-		printk("%s %d [ERR]" format, func_name, line, args);
+		printk(format, func_name, line, args);
 		break;
 	case TLL_CNT:
-		printk("%s %d [DEF]" format, func_name, line, args);
+		printk(format, func_name, line, args);
 		break;
 	default:
 		break;
 	}
 	va_end(args);
+	return;
 }

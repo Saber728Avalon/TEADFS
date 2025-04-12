@@ -4,8 +4,8 @@
 #include "mem.h"
 #include "inode.h"
 
-#include <linux/stdlib.h>
 #include <linux/fs.h>
+#include <linux/mm.h>
 
 
 static int teadfs_inode_test(struct inode* inode, void* lower_inode)
@@ -47,7 +47,7 @@ static int teadfs_inode_set(struct inode* inode, void* opaque)
 }
 
 
-static struct inode* __teadfs_get_inode(struct inode* lower_inode,
+struct inode* __teadfs_get_inode(struct inode* lower_inode,
 	struct super_block* sb)
 {
 	struct inode* inode;
@@ -137,7 +137,7 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
  * Find a file on disk. If the file does not exist, then we'll add it to the
  * dentry cache and continue on to read it from the disk.
  */
-static struct dentry* teadfs_lookup(struct inode* ecryptfs_dir_inode,
+struct dentry* teadfs_lookup(struct inode* ecryptfs_dir_inode,
 	struct dentry* ecryptfs_dentry,
 	unsigned int flags)
 {

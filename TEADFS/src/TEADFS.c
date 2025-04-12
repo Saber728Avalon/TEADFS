@@ -10,9 +10,8 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/namei.h>
-#if CONFIG_BDICONFIG_BDI
-#include <linux/bdi.h>
-#endif
+#include <linux/string.h>
+
 
 /**
  * teadfs_mount
@@ -26,15 +25,14 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 {
 	struct super_block* s = NULL;
 	struct teadfs_sb_info* sbi = NULL;
-	struct ecryptfs_mount_crypt_stat* mount_crypt_stat;
 	struct teadfs_dentry_info* root_info;
 	const char* err = "Getting sb failed";
 	struct inode* inode;
 	struct path path;
-	uid_t check_ruid;
 	int rc;
 	int release_path = 0;
 
+	LOG_DBG("ENTRY\n");
 	do {
 		sbi = teadfs_zalloc(sizeof(struct teadfs_sb_info), GFP_KERNEL);
 		if (!sbi) {
@@ -46,19 +44,19 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 			rc = PTR_ERR(s);
 			break;
 		}
-#if CONFIG_BDICONFIG_BDI
+#if defined(CONFIG_BDICONFIG_BDI)
 		rc = bdi_setup_and_register(&sbi->bdi, "teadfs", BDI_CAP_MAP_COPY);
 #endif
 		if (rc)
 			break;
 
-		teadfs_set_lower_super(s, sbi);
+		teadfs_set_lower_super(sbi, s);
 		s->s_bdi = &sbi->bdi;
 
 		/* ->kill_sb() will take care of sbi after that point */
 		sbi = NULL;
-		s->s_op = &ecryptfs_sops;
-		s->s_d_op = &ecryptfs_dops;
+		s->s_op = &teadfs_sops;
+		s->s_d_op = &teadfs_dops;
 
 		err = "Reading sb failed";
 		rc = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &path);
@@ -67,7 +65,8 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 			break;
 		}
 		release_path = 1;
-		if (path.dentry->d_sb->s_type == &ecryptfs_fs_type) {
+		//double mount is error
+		if (0 == strcmp(path.dentry->d_sb->s_type->name, "teadfs")) {
 			rc = -EINVAL;
 			LOG_ERR("Mount on filesystem of type "
 				"eCryptfs explicitly disallowed due to "
@@ -75,16 +74,7 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 			break;
 		}
 
-		if (check_ruid && !uid_eq(path.dentry->d_inode->i_uid, current_uid())) {
-			rc = -EPERM;
-			LOG_ERR("Mount of device (uid: %d) not owned by "
-				"requested user (uid: %d)\n",
-				i_uid_read(path.dentry->d_inode),
-				from_kuid(&init_user_ns, current_uid()));
-			break;
-		}
-
-		ecryptfs_set_superblock_lower(s, path.dentry->d_sb);
+		teadfs_set_superblock_lower(s, path.dentry->d_sb);
 
 		/**
 		 * Set the POSIX ACL flag based on whether they're enabled in the lower
@@ -98,8 +88,7 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 		 *   1) The lower mount is ro
 		 *   2) The ecryptfs_encrypted_view mount option is specified
 		 */
-		if (path.dentry->d_sb->s_flags & MS_RDONLY ||
-			mount_crypt_stat->flags & ECRYPTFS_ENCRYPTED_VIEW_ENABLED)
+		if (path.dentry->d_sb->s_flags & MS_RDONLY)
 			s->s_flags |= MS_RDONLY;
 
 		s->s_maxbytes = path.dentry->d_sb->s_maxbytes;
@@ -118,15 +107,16 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 		}
 
 		rc = -ENOMEM;
-		root_info = teadfs_zalloc(struct teadfs_dentry_info, GFP_KERNEL);
+		root_info = teadfs_zalloc(sizeof(struct teadfs_dentry_info), GFP_KERNEL);
 		if (!root_info)
 			break;
 
 		/* ->kill_sb() will take care of root_info */
 		teadfs_set_dentry_private(s->s_root, root_info);
-		teadfs_set_dentry_lower(s->s_root, path);
+		teadfs_set_lower_path(s->s_root, &path);
 
 		s->s_flags |= MS_ACTIVE;
+		LOG_DBG("Mount success\n");
 		return dget(s->s_root);
 	} while (0);
 
@@ -139,7 +129,6 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 	if (sbi) {
 		teadfs_free(sbi);
 	}
-	} while (0);
 	LOG_ERR("%s; rc = [%d]\n", err, rc);
 	return ERR_PTR(rc);
 }
@@ -153,10 +142,11 @@ static struct file_system_type teadfs_fs_type = {
     .fs_flags = 0
 };
  
-static int __init my_module_init(void) {
+static int __init teadfs_module_init(void) {
     int rc;
 
     LOG_DBG("ENTRY\n");
+	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     do {
         rc = register_filesystem(&teadfs_fs_type);
         if (rc) {
@@ -168,18 +158,18 @@ static int __init my_module_init(void) {
     return 0;
 }
  
-static void __exit my_module_exit(void) {
+static void __exit teadfs_module_exit(void) {
     LOG_DBG("ENTRY\n");
     unregister_filesystem(&teadfs_fs_type);
     LOG_DBG("LEVAL\n");
 }
  
-module_init(my_module_init);
-module_exit(my_module_exit);
+module_init(teadfs_module_init);
+module_exit(teadfs_module_exit);
  
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Your Name");
-MODULE_DESCRIPTION("A simple kernel module example");
+MODULE_AUTHOR("TEADFS");
+MODULE_DESCRIPTION("Transport Encrypt And Decrypt File");
 MODULE_VERSION("0.1");
 
 

@@ -37,6 +37,7 @@
 #include <linux/crypto.h>
 #include <linux/statfs.h>
 #include <linux/magic.h>
+#include <linux/mm.h>
 
 
 /**
@@ -58,12 +59,11 @@ static struct inode *teadfs_alloc_inode(struct super_block *sb)
 
 	LOG_DBG("ENTRY\n");
 	do {
-		inode_info = teadfs_zalloc(struct teadfs_inode_info, GFP_KERNEL);
+		inode_info = teadfs_zalloc(sizeof(struct teadfs_inode_info), GFP_KERNEL);
 		if (unlikely(!inode_info))
 			break;
 		mutex_init(&inode_info->lower_file_mutex);
 		atomic_set(&inode_info->lower_file_count, 0);
-		inode_info->lower_file = NULL;
 		inode = &inode_info->vfs_inode;
 	} while (0);
 
@@ -77,7 +77,9 @@ static void teadfs_i_callback(struct rcu_head *head)
 	struct teadfs_inode_info *inode_info;
 	inode_info = teadfs_inode_to_private(inode);
 
+	LOG_DBG("ENTRY\n");
 	teadfs_free(inode_info);
+	LOG_DBG("LEVAL\n");
 }
 
 /**
@@ -94,8 +96,8 @@ static void teadfs_destroy_inode(struct inode *inode)
 	struct teadfs_inode_info *inode_info;
 	LOG_DBG("ENTRY\n");
 	inode_info = teadfs_inode_to_private(inode);
-	BUG_ON(inode_info->lower_file);
-	call_rcu(&inode->i_rcu, ecryptfs_i_callback);
+	BUG_ON(inode_info->lower_inode);
+	call_rcu(&inode->i_rcu, teadfs_i_callback);
 	LOG_DBG("LEVAL\n");
 }
 
@@ -109,7 +111,7 @@ static void teadfs_destroy_inode(struct inode *inode)
  */
 static int teadfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 {
-	struct dentry *lower_dentry = ecryptfs_dentry_to_lower(dentry);
+	struct dentry *lower_dentry = teadfs_dentry_to_lower(dentry);
 	int rc;
 
 	LOG_DBG("ENTRY\n");

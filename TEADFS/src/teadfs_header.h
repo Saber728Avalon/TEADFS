@@ -5,6 +5,9 @@
 
 #include <linux/fs.h>
 #include <linux/path.h>
+#if defined(CONFIG_BDICONFIG_BDI)
+	#include <linux/backing-dev.h>
+#endif
 
 
 #define TEADFS_SUPER_MAGIC 0x44414554
@@ -13,7 +16,7 @@
 struct teadfs_sb_info {
 	struct super_block* lower_sb;
 
-#if CONFIG_BDICONFIG_BDI
+#if defined(CONFIG_BDICONFIG_BDI)
 	struct backing_dev_info bdi;
 #endif
 };
@@ -43,13 +46,19 @@ struct teadfs_inode_info {
 static struct teadfs_sb_info* teadfs_get_super_block(struct super_block *super) {
 	return ((struct teadfs_sb_info*)(super)->s_fs_info);
 };
+static void
+teadfs_set_superblock_lower(struct super_block* sb,
+	struct super_block* lower_sb)
+{
+	((struct teadfs_sb_info*)sb->s_fs_info)->lower_sb = lower_sb;
+}
 static inline struct super_block*
 teadfs_superblock_to_lower(struct super_block* super)
 {
 	return  teadfs_get_super_block(super)->lower_sb;
 }
 	
-static void teadfs_set_lower_super(struct super_block* super, struct super_block* val)
+static void teadfs_set_lower_super(struct teadfs_sb_info* super, struct super_block* val)
 {
 	((struct teadfs_sb_info *)super)->lower_sb = val;
 }
@@ -105,7 +114,11 @@ teadfs_dentry_to_lower(struct dentry* dentry)
 {
 	return ((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.dentry;
 }
-
+static inline struct path*
+teadfs_dentry_to_lower_path(struct dentry* dentry)
+{
+	return &((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path;
+}
 static inline void
 teadfs_set_dentry_lower(struct dentry* dentry, struct dentry* lower_dentry)
 {

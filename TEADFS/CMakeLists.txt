@@ -15,11 +15,13 @@ add_custom_target(TEADFS ALL cp -f ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c ${CMAKE_C
     COMMAND cp -f  ${CMAKE_CURRENT_SOURCE_DIR}/src/Makefile ${CMAKE_CURRENT_BINARY_DIR}/src/
     COMMENT "Copy kernel module of TEADFS makefile target"
     
+    COMMAND export TEADFS_KO_OUTPUT_DIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
     COMMAND make -C ${KERNEL_DIR} M=${CMAKE_CURRENT_BINARY_DIR}/src/ modules
     COMMENT "Make kernel module of TEADFS makefile target"
  
     COMMAND rm -rf *.o *.mod.c *.symvers *.order *.makers *.mod .*.cmd .*.tmp
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/src/
+    COMMAND cp -f  ${CMAKE_CURRENT_BINARY_DIR}/src/TEADFS.ko ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
     COMMENT "Clean kernel module of TEADFS makefile target"
     )
  
