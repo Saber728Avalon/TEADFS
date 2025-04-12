@@ -3,10 +3,12 @@
 #include "teadfs_header.h"
 #include "mem.h"
 #include "inode.h"
+#include "mmap.h"
+#include "inode.h"
 
 #include <linux/fs.h>
 #include <linux/mm.h>
-
+#include <linux/fs_stack.h>
 
 static int teadfs_inode_test(struct inode* inode, void* lower_inode)
 {
@@ -26,7 +28,7 @@ static int teadfs_inode_set(struct inode* inode, void* opaque)
 	fsstack_copy_inode_size(inode, lower_inode);
 	inode->i_ino = lower_inode->i_ino;
 	inode->i_version++;
-	inode->i_mapping->a_ops = &ecryptfs_aops;
+	inode->i_mapping->a_ops = &teadfs_aops;
 	inode->i_mapping->backing_dev_info = inode->i_sb->s_bdi;
 
 	if (S_ISLNK(inode->i_mode))
@@ -92,7 +94,7 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 		return -ENOMEM;
 	}
 
-	lower_mnt = mntget(ecryptfs_dentry_to_lower_mnt(dentry->d_parent));
+	lower_mnt = mntget(teadfs_dentry_to_lower_path(dentry->d_parent)->mnt);
 	fsstack_copy_attr_atime(dir_inode, lower_dentry->d_parent->d_inode);
 	BUG_ON(!lower_dentry->d_count);
 
