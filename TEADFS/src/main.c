@@ -14,13 +14,6 @@
 
 
 
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("TEADFS");
-MODULE_DESCRIPTION("Transport Encrypt And Decrypt File");
-MODULE_VERSION("1.0.0");
-MODULE_ALIAS("teadfs")
-
-
 /**
  * teadfs_mount
  * @fs_type
@@ -149,7 +142,8 @@ static struct file_system_type teadfs_fs_type = {
     .kill_sb = generic_shutdown_super,
     .fs_flags = 0
 };
- 
+MODULE_ALIAS_FS("teadfs");
+
 static int __init teadfs_module_init(void) {
     int rc;
 	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
@@ -175,6 +169,14 @@ static void __exit teadfs_module_exit(void) {
 	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 }
 
+
+ 
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("TEADFS");
+MODULE_DESCRIPTION("Transport Encrypt And Decrypt File");
+MODULE_VERSION("0.1");
+MODULE_ALIAS("teadfs");
+
 module_init(teadfs_module_init);
 module_exit(teadfs_module_exit);
- 

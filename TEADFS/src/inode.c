@@ -222,3 +222,5 @@ const struct inode_operations teadfs_main_iops = {
 	//.listxattr = ecryptfs_listxattr,
 	//.removexattr = ecryptfs_removexattr
 };
+
+

@@ -1,11 +1,15 @@
 MOD = TEADFS
-KPATH :=/lib/modules/$(shell uname -r)/build
+ifndef KPATH
+	KPATH :=/lib/modules/$(shell uname -r)/build
+endif
 PWD :=$(shell pwd)
 obj-m += $(MOD).o
-$(MOD)-objs := teadfs_log.o inode.o super.o lookup.o mmap.o dentry.o file.o
+$(MOD)-y := main.o teadfs_log.o inode.o super.o lookup.o mmap.o dentry.o file.o 
+ccflags-y = -D__KERNEL__ -DMODULE -O0 -Wall -fstack-protector
+
 
 all:
-	echo "$($(MOD)-objs)"
+	echo "$($(MOD)-y)"
 	$(MAKE) -C $(KPATH) M=$(PWD) modules
 
 clean:
