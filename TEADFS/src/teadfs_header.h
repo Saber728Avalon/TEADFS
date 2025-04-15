@@ -29,7 +29,7 @@ struct teadfs_dentry_info {
 
 /* file private data. */
 struct teadfs_file_info {
-	struct file* wfi_file;
+	struct file* lower_file;
 };
 
 
@@ -68,7 +68,7 @@ static inline void pathcpy(struct path* dst, const struct path* src) {
 	dst->dentry = src->dentry;
 	dst->mnt = src->mnt;
 }
-static void teadfs_set_lower_path(const struct dentry* dentry, struct path* lower_path) {
+static void teadfs_get_lower_path(const struct dentry* dentry, struct path* lower_path) {
 	pathcpy(lower_path, &((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path);
 	path_get(lower_path);
 	return;
@@ -84,16 +84,20 @@ teadfs_set_file_private(struct file* file,
 
 static struct file* teadfs_file_to_lower(struct file* file)
 {
-	return ((struct teadfs_file_info*)file->private_data)->wfi_file;
+	return ((struct teadfs_file_info*)file->private_data)->lower_file;
 }
 
 static void
 teadfs_set_file_lower(struct file* file, struct file* lower_file)
 {
-	((struct teadfs_file_info*)file->private_data)->wfi_file =
+	((struct teadfs_file_info*)file->private_data)->lower_file =
 		lower_file;
 }
-
+static inline struct teadfs_file_info*
+teadfs_file_to_private(struct file* file)
+{
+	return file->private_data;
+}
 
 
 static inline struct teadfs_dentry_info*

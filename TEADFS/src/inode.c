@@ -6,6 +6,7 @@
 #include <linux/fs_stack.h>
 #include <linux/mm.h>
 #include <linux/xattr.h>
+#include <linux/module.h>
 
 static struct dentry* lock_parent(struct dentry* dentry)
 {
@@ -221,5 +222,3 @@ const struct inode_operations teadfs_main_iops = {
 	//.listxattr = ecryptfs_listxattr,
 	//.removexattr = ecryptfs_removexattr
 };
-
-

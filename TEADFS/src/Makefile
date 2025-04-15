@@ -2,7 +2,7 @@ MOD = TEADFS
 KPATH :=/lib/modules/$(shell uname -r)/build
 PWD :=$(shell pwd)
 obj-m += $(MOD).o
-$(MOD)-objs := teadfs_log.o inode.o super.o lookup.o mmap.o dentry.o
+$(MOD)-objs := teadfs_log.o inode.o super.o lookup.o mmap.o dentry.o file.o
 
 all:
 	echo "$($(MOD)-objs)"

@@ -1,10 +1,10 @@
 #include "teadfs_log.h"
 #include "teadfs_header.h"
 
-#include <linux/stdlib.h>
 #include <linux/fs.h>
-
-
+#include <linux/mm.h>
+#include <linux/pagemap.h>
+#include <linux/fs_stack.h>
 
 /**
  * teadfs_read_lower
@@ -123,7 +123,6 @@ static int treadfs_write_begin(struct file* file,
 	int rc = 0;
 	char* virt;
 	loff_t offset;
-	int rc;
 
 	//find page. if not exist create page.
 	page = grab_cache_page_write_begin(mapping, index, flags);
@@ -211,18 +210,19 @@ static int teadfs_write_end(struct file* file,
 	char* virt;
 	loff_t offset;
 
+
 	LOG_DBG("ENTRY\n");
 
 	offset = (((loff_t)page->index) << PAGE_CACHE_SHIFT);
-	virt = kmap(page_for_lower);
-	rc = teadfs_write_lower(ecryptfs_inode, virt, offset, size);
+	virt = kmap(page);
+	rc = teadfs_write_lower(ecryptfs_inode, virt, offset, to);
 	if (rc > 0)
 		rc = 0;
-	kunmap(page_for_lower);
+	kunmap(page);
 	if (!rc) {
 		rc = copied;
 		fsstack_copy_inode_size(ecryptfs_inode,
-			ecryptfs_inode_to_lower(ecryptfs_inode));
+			teadfs_inode_to_lower(ecryptfs_inode));
 	}
 
 	unlock_page(page);
@@ -263,7 +263,7 @@ static sector_t teadfs_bmap(struct address_space* mapping, sector_t block)
 
 	LOG_DBG("ENTRY\n");
 	inode = (struct inode*)mapping->host;
-	lower_inode = ecryptfs_inode_to_lower(inode);
+	lower_inode = teadfs_inode_to_lower(inode);
 	if (lower_inode->i_mapping->a_ops->bmap)
 		rc = lower_inode->i_mapping->a_ops->bmap(lower_inode->i_mapping,
 			block);

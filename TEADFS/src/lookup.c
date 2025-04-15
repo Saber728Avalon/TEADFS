@@ -5,10 +5,14 @@
 #include "inode.h"
 #include "mmap.h"
 #include "inode.h"
+#include "file.h"
 
 #include <linux/fs.h>
 #include <linux/mm.h>
 #include <linux/fs_stack.h>
+#include <linux/mount.h>
+#include <linux/dcache.h>
+#include <linux/namei.h> 
 
 static int teadfs_inode_test(struct inode* inode, void* lower_inode)
 {
@@ -96,11 +100,10 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 
 	lower_mnt = mntget(teadfs_dentry_to_lower_path(dentry->d_parent)->mnt);
 	fsstack_copy_attr_atime(dir_inode, lower_dentry->d_parent->d_inode);
-	BUG_ON(!lower_dentry->d_count);
 
-	ecryptfs_set_dentry_private(dentry, dentry_info);
-	ecryptfs_set_dentry_lower(dentry, lower_dentry);
-	ecryptfs_set_dentry_lower_mnt(dentry, lower_mnt);
+	teadfs_set_dentry_private(dentry, dentry_info);
+	teadfs_set_dentry_lower(dentry, lower_dentry);
+	teadfs_dentry_to_lower_path(dentry)->mnt = lower_mnt;
 
 	if (!lower_dentry->d_inode) {
 		/* We want to add because we couldn't find in lower */
@@ -112,13 +115,6 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 		LOG_ERR("%s: Error interposing; rc = [%ld]\n",
 			__func__, PTR_ERR(inode));
 		return PTR_ERR(inode);
-	}
-	if (S_ISREG(inode->i_mode)) {
-		rc = ecryptfs_i_size_read(dentry, inode);
-		if (rc) {
-			make_bad_inode(inode);
-			return rc;
-		}
 	}
 
 	if (inode->i_state & I_NEW)
@@ -146,32 +142,28 @@ struct dentry* teadfs_lookup(struct inode* ecryptfs_dir_inode,
 	struct dentry* lower_dir_dentry, * lower_dentry;
 	int rc = 0;
 
-	lower_dir_dentry = ecryptfs_dentry_to_lower(ecryptfs_dentry->d_parent);
-	mutex_lock(&lower_dir_dentry->d_inode->i_mutex);
-	lower_dentry = lookup_one_len(ecryptfs_dentry->d_name.name,
-		lower_dir_dentry,
-		ecryptfs_dentry->d_name.len);
-	mutex_unlock(&lower_dir_dentry->d_inode->i_mutex);
-	if (IS_ERR(lower_dentry)) {
-		rc = PTR_ERR(lower_dentry);
-		LOG_ERR("%s: lookup_one_len() returned "
-			"[%d] on lower_dentry = [%s]\n", __func__, rc,
-			ecryptfs_dentry->d_name.name);
-		goto out;
-	}
-	if (lower_dentry->d_inode)
-		goto interpose;
-	mount_crypt_stat = &ecryptfs_superblock_to_private(
-		ecryptfs_dentry->d_sb)->mount_crypt_stat;
-	if (!(mount_crypt_stat
-		&& (mount_crypt_stat->flags & ECRYPTFS_GLOBAL_ENCRYPT_FILENAMES)))
-		goto interpose;
-	dput(lower_dentry);
-interpose:
+	LOG_DBG("ENTRY\n");
+	do {
+		lower_dir_dentry = teadfs_dentry_to_lower(ecryptfs_dentry->d_parent);
+		mutex_lock(&lower_dir_dentry->d_inode->i_mutex);
+		lower_dentry = lookup_one_len(ecryptfs_dentry->d_name.name,
+			lower_dir_dentry,
+			ecryptfs_dentry->d_name.len);
+		mutex_unlock(&lower_dir_dentry->d_inode->i_mutex);
+		if (IS_ERR(lower_dentry)) {
+			rc = PTR_ERR(lower_dentry);
+			LOG_ERR("%s: lookup_one_len() returned "
+				"[%d] on lower_dentry = [%s]\n", __func__, rc,
+				ecryptfs_dentry->d_name.name);
+			break;
+		}
+		if (lower_dentry->d_inode)
+			break;
+		dput(lower_dentry);
+	} while (0);
 	rc = teadfs_lookup_interpose(ecryptfs_dentry, lower_dentry,
 		ecryptfs_dir_inode);
-out:
-	kfree(encrypted_and_encoded_name);
+	LOG_DBG("rc = [%d]\n", rc);
 	return ERR_PTR(rc);
 }
 

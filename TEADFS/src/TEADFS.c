@@ -13,6 +13,14 @@
 #include <linux/string.h>
 
 
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("TEADFS");
+MODULE_DESCRIPTION("Transport Encrypt And Decrypt File");
+MODULE_VERSION("1.0.0");
+MODULE_ALIAS("teadfs")
+
+
 /**
  * teadfs_mount
  * @fs_type
@@ -113,7 +121,7 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 
 		/* ->kill_sb() will take care of root_info */
 		teadfs_set_dentry_private(s->s_root, root_info);
-		teadfs_set_lower_path(s->s_root, &path);
+		teadfs_get_lower_path(s->s_root, &path);
 
 		s->s_flags |= MS_ACTIVE;
 		LOG_DBG("Mount success\n");
@@ -144,7 +152,7 @@ static struct file_system_type teadfs_fs_type = {
  
 static int __init teadfs_module_init(void) {
     int rc;
-
+	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     LOG_DBG("ENTRY\n");
 	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     do {
@@ -155,21 +163,18 @@ static int __init teadfs_module_init(void) {
         }
     } while (0);
     LOG_DBG("LEVAL\n");
+	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     return 0;
 }
  
 static void __exit teadfs_module_exit(void) {
+	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     LOG_DBG("ENTRY\n");
     unregister_filesystem(&teadfs_fs_type);
     LOG_DBG("LEVAL\n");
+	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 }
- 
+
 module_init(teadfs_module_init);
 module_exit(teadfs_module_exit);
  
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("TEADFS");
-MODULE_DESCRIPTION("Transport Encrypt And Decrypt File");
-MODULE_VERSION("0.1");
-
-

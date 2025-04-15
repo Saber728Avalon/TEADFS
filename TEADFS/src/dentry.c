@@ -28,6 +28,7 @@
 #include "teadfs_header.h"
 #include "mem.h"
 
+#include <linux/fs.h>
 #include <linux/dcache.h>
 #include <linux/namei.h>
 #include <linux/mount.h>
@@ -48,7 +49,7 @@
  * Returns 1 if valid, 0 otherwise.
  *
  */
-static int teads_d_revalidate(struct dentry *dentry, unsigned int flags)
+static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 {
 	struct dentry *lower_dentry;
 	int rc = 1;
@@ -59,7 +60,7 @@ static int teads_d_revalidate(struct dentry *dentry, unsigned int flags)
 		}
 		lower_dentry = teadfs_dentry_to_lower(dentry);
 		if (!lower_dentry->d_op || !lower_dentry->d_op->d_revalidate)
-			goto out;
+			break;
 		rc = lower_dentry->d_op->d_revalidate(lower_dentry, flags);
 		if (dentry->d_inode) {
 			struct inode* lower_inode =
@@ -82,9 +83,9 @@ static int teads_d_revalidate(struct dentry *dentry, unsigned int flags)
 static void teadfs_d_release(struct dentry *dentry)
 {
 	if (teadfs_dentry_to_private(dentry)) {
-		if (treadfs_dentry_to_lower(dentry)) {
-			dput(ecryptfs_dentry_to_lower(dentry));
-			mntput(ecryptfs_dentry_to_lower_mnt(dentry));
+		if (teadfs_dentry_to_lower(dentry)) {
+			dput(teadfs_dentry_to_lower(dentry));
+			mntput(teadfs_dentry_to_lower_path(dentry)->mnt);
 		}
 		teadfs_free(teadfs_dentry_to_private(dentry));
 	}
