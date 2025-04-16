@@ -89,38 +89,44 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 	struct vfsmount* lower_mnt;
 	int rc = 0;
 
-	dentry_info = teadfs_zalloc(sizeof(struct teadfs_dentry_info), GFP_KERNEL);
-	if (!dentry_info) {
-		LOG_ERR("%s: Out of memory whilst attempting "
-			"to allocate ecryptfs_dentry_info struct\n",
-			__func__);
-		dput(lower_dentry);
-		return -ENOMEM;
-	}
+	LOG_DBG("ENTRY\n");
+	do {
+		dentry_info = teadfs_zalloc(sizeof(struct teadfs_dentry_info), GFP_KERNEL);
+		if (!dentry_info) {
+			LOG_ERR("%s: Out of memory whilst attempting "
+				"to allocate ecryptfs_dentry_info struct\n",
+				__func__);
+			dput(lower_dentry);
+			rc = -ENOMEM;
+			break;
+		}
 
-	lower_mnt = mntget(teadfs_dentry_to_lower_path(dentry->d_parent)->mnt);
-	fsstack_copy_attr_atime(dir_inode, lower_dentry->d_parent->d_inode);
+		lower_mnt = mntget(teadfs_dentry_to_lower_path(dentry->d_parent)->mnt);
+		fsstack_copy_attr_atime(dir_inode, lower_dentry->d_parent->d_inode);
 
-	teadfs_set_dentry_private(dentry, dentry_info);
-	teadfs_set_dentry_lower(dentry, lower_dentry);
-	teadfs_dentry_to_lower_path(dentry)->mnt = lower_mnt;
+		teadfs_set_dentry_private(dentry, dentry_info);
+		teadfs_set_dentry_lower(dentry, lower_dentry);
+		teadfs_dentry_to_lower_path(dentry)->mnt = lower_mnt;
 
-	if (!lower_dentry->d_inode) {
-		/* We want to add because we couldn't find in lower */
-		d_add(dentry, NULL);
-		return 0;
-	}
-	inode = __teadfs_get_inode(lower_inode, dir_inode->i_sb);
-	if (IS_ERR(inode)) {
-		LOG_ERR("%s: Error interposing; rc = [%ld]\n",
-			__func__, PTR_ERR(inode));
-		return PTR_ERR(inode);
-	}
+		if (!lower_dentry->d_inode) {
+			/* We want to add because we couldn't find in lower */
+			d_add(dentry, NULL);
+			rc = 0;
+			break;
+		}
+		inode = __teadfs_get_inode(lower_inode, dir_inode->i_sb);
+		if (IS_ERR(inode)) {
+			LOG_ERR("%s: Error interposing; rc = [%ld]\n",
+				__func__, PTR_ERR(inode));
+			rc = PTR_ERR(inode);
+			break;
+		}
 
-	if (inode->i_state & I_NEW)
-		unlock_new_inode(inode);
-	d_add(dentry, inode);
-
+		if (inode->i_state & I_NEW)
+			unlock_new_inode(inode);
+		d_add(dentry, inode);
+	} while (0);
+	LOG_DBG("rc = [%d]\n", rc);
 	return rc;
 }
 

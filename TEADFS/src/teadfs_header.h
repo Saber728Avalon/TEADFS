@@ -74,6 +74,12 @@ static void teadfs_get_lower_path(const struct dentry* dentry, struct path* lowe
 	return;
 }
 
+static void teadfs_set_lower_path(const struct dentry* dentry, struct path* lower_path) {
+	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.dentry = lower_path->dentry;
+	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.mnt = lower_path->mnt;
+	return;
+}
+
 
 static void
 teadfs_set_file_private(struct file* file,
