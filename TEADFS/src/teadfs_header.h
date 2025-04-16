@@ -58,9 +58,9 @@ teadfs_superblock_to_lower(struct super_block* super)
 	return  teadfs_get_super_block(super)->lower_sb;
 }
 	
-static void teadfs_set_lower_super(struct teadfs_sb_info* super, struct super_block* val)
+static void teadfs_set_lower_super(struct super_block* super, struct teadfs_sb_info* super_info)
 {
-	((struct teadfs_sb_info *)super)->lower_sb = val;
+	super->s_fs_info = super_info;
 }
 
 /* path based (dentry/mnt) macros */

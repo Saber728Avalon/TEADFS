@@ -40,25 +40,28 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 			rc = -ENOMEM;
 			break;
 		}
+		LOG_DBG("ENTRY\n");
 		s = sget(fs_type, NULL, set_anon_super, flags, NULL);
 		if (IS_ERR(s)) {
 			rc = PTR_ERR(s);
 			break;
 		}
 #if defined(CONFIG_BDICONFIG_BDI)
+		LOG_DBG("ENTRY\n");
 		rc = bdi_setup_and_register(&sbi->bdi, "teadfs", BDI_CAP_MAP_COPY);
-#endif
 		if (rc)
 			break;
-
-		teadfs_set_lower_super(sbi, s);
 		s->s_bdi = &sbi->bdi;
+#endif
 
+		LOG_DBG("ENTRY\n");
+		teadfs_set_lower_super(s, sbi);
+		LOG_DBG("ENTRY\n");
 		/* ->kill_sb() will take care of sbi after that point */
 		sbi = NULL;
 		s->s_op = &teadfs_sops;
 		s->s_d_op = &teadfs_dops;
-
+		LOG_DBG("ENTRY\n");
 		err = "Reading sb failed";
 		rc = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &path);
 		if (rc) {
@@ -66,6 +69,7 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 			break;
 		}
 		release_path = 1;
+		LOG_DBG("ENTRY\n");
 		//double mount is error
 		if (0 == strcmp(path.dentry->d_sb->s_type->name, "teadfs")) {
 			rc = -EINVAL;
@@ -74,9 +78,9 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 				"known incompatibilities\n");
 			break;
 		}
-
+		LOG_DBG("ENTRY\n");
 		teadfs_set_superblock_lower(s, path.dentry->d_sb);
-
+		LOG_DBG("ENTRY\n");
 		/**
 		 * Set the POSIX ACL flag based on whether they're enabled in the lower
 		 * mount.
@@ -95,12 +99,12 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 		s->s_maxbytes = path.dentry->d_sb->s_maxbytes;
 		s->s_blocksize = path.dentry->d_sb->s_blocksize;
 		s->s_magic = ECRYPTFS_SUPER_MAGIC;
-
+		LOG_DBG("ENTRY\n");
 		inode = teadfs_get_inode(path.dentry->d_inode, s);
 		rc = PTR_ERR(inode);
 		if (IS_ERR(inode))
 			break;
-
+		LOG_DBG("ENTRY\n");
 		s->s_root = d_make_root(inode);
 		if (!s->s_root) {
 			rc = -ENOMEM;
@@ -111,7 +115,7 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 		root_info = teadfs_zalloc(sizeof(struct teadfs_dentry_info), GFP_KERNEL);
 		if (!root_info)
 			break;
-
+		LOG_DBG("ENTRY\n");
 		/* ->kill_sb() will take care of root_info */
 		teadfs_set_dentry_private(s->s_root, root_info);
 		teadfs_get_lower_path(s->s_root, &path);
