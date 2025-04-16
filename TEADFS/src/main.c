@@ -146,9 +146,7 @@ MODULE_ALIAS_FS("teadfs");
 
 static int __init teadfs_module_init(void) {
     int rc;
-	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     LOG_DBG("ENTRY\n");
-	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     do {
         rc = register_filesystem(&teadfs_fs_type);
         if (rc) {
@@ -157,16 +155,13 @@ static int __init teadfs_module_init(void) {
         }
     } while (0);
     LOG_DBG("LEVAL\n");
-	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     return 0;
 }
  
 static void __exit teadfs_module_exit(void) {
-	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
     LOG_DBG("ENTRY\n");
     unregister_filesystem(&teadfs_fs_type);
     LOG_DBG("LEVAL\n");
-	printk(KERN_INFO "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 }
 
 
