@@ -32,6 +32,7 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 			rc = -EIO;
 			break;
 		}
+		LOG_ERR("file:%px, lower_file:%px\n", file, lower_file);
 		rc = kernel_read(lower_file, offset, data, size);
 	} while (0);
 	LOG_DBG("LEVAL %d\n", rc);

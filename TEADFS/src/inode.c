@@ -33,6 +33,7 @@ static int teadfs_create(struct inode* dir, struct dentry* dentry,
 	struct dentry* lower_dentry;
 	struct dentry* lower_parent_dentry = NULL;
 	struct inode* inode;
+	int unlock = 0;
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -47,6 +48,7 @@ static int teadfs_create(struct inode* dir, struct dentry* dentry,
 			inode = ERR_CAST(lower_parent_dentry);
 			break;
 		}
+		unlock = 1;
 		//create file or directory
 		rc = vfs_create(d_inode(lower_parent_dentry), lower_dentry, mode,
 			want_excl);
@@ -70,9 +72,14 @@ static int teadfs_create(struct inode* dir, struct dentry* dentry,
 		//copy file attr
 		fsstack_copy_attr_times(dir, d_inode(lower_parent_dentry));
 		fsstack_copy_inode_size(dir, d_inode(lower_parent_dentry));
+
+		unlock_new_inode(inode);
+		d_instantiate(dentry, inode);
 	} while (0);
 
-	unlock_dir(lower_parent_dentry);
+	if (unlock) {
+		unlock_dir(lower_parent_dentry);
+	}
 	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return rc;
 }

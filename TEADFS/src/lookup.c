@@ -57,7 +57,7 @@ static int teadfs_inode_set(struct inode* inode, void* opaque)
 struct inode* __teadfs_get_inode(struct inode* lower_inode,
 	struct super_block* sb)
 {
-	struct inode* inode;
+	struct inode* inode = NULL;
 
 	LOG_DBG("ENTRY\n");
 	do {

@@ -60,18 +60,46 @@ static ssize_t teadfs_read_update_atime(struct kiocb *iocb,
 	struct path lower;
 	struct file *file = iocb->ki_filp;
 
-	rc = generic_file_aio_read(iocb, iov, nr_segs, pos);
-	/*
-	 * Even though this is a async interface, we need to wait
-	 * for IO to finish to update atime
-	 */
-	if (-EIOCBQUEUED == rc)
-		rc = wait_on_sync_kiocb(iocb);
-	if (rc >= 0) {
-		lower.dentry = teadfs_dentry_to_lower(file->f_path.dentry);
-		lower.mnt = teadfs_dentry_to_lower_path(file->f_path.dentry)->mnt;
-		touch_atime(&lower);
-	}
+	LOG_DBG("ENTRY\n");
+	do {
+		rc = generic_file_aio_read(iocb, iov, nr_segs, pos);
+		/*
+		 * Even though this is a async interface, we need to wait
+		 * for IO to finish to update atime
+		 */
+		if (-EIOCBQUEUED == rc)
+			rc = wait_on_sync_kiocb(iocb);
+		if (rc >= 0) {
+			lower.dentry = teadfs_dentry_to_lower(file->f_path.dentry);
+			lower.mnt = teadfs_dentry_to_lower_path(file->f_path.dentry)->mnt;
+			touch_atime(&lower);
+		}
+	} while (0);
+	
+	LOG_DBG("LEVAL rc:%d\n", rc);
+	return rc;
+}
+
+static ssize_t teadfs_write(struct kiocb* iocb,
+	const struct iovec* iov,
+	unsigned long nr_segs, loff_t pos)
+{
+	ssize_t rc;
+	struct path lower;
+	struct file* file = iocb->ki_filp;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		rc = generic_file_aio_write(iocb, iov, nr_segs, pos);
+		/*
+		 * Even though this is a async interface, we need to wait
+		 * for IO to finish to update atime
+		 */
+		if (-EIOCBQUEUED == rc)
+			rc = wait_on_sync_kiocb(iocb);
+	} while (0);
+
+	LOG_DBG("LEVAL rc:%d\n", rc);
 	return rc;
 }
 
@@ -244,7 +272,6 @@ static int teadfs_open(struct inode *inode, struct file *file)
 			rc = -ENOMEM;
 			break;
 		}
-		LOG_DBG("ENTRY\n");
 		/* open lower object and link wrapfs's file struct to lower's */
 		LOG_ERR("dentry:%px mnt:%px   lower_path:%px\n", lower_path->dentry, lower_path->mnt, lower_path);
 		//check file flag
@@ -264,19 +291,12 @@ static int teadfs_open(struct inode *inode, struct file *file)
 				fput(file_info->lower_file); /* fput calls dput for lower_dentry */
 			}
 		}
-		LOG_DBG("ENTRY\n");
-		if ((teadfs_inode_to_private(inode)->lower_inode->i_flags & O_ACCMODE)
-			== O_RDONLY && (file->f_flags & O_ACCMODE) != O_RDONLY) {
-			rc = -EPERM;
-			LOG_ERR("%s: Lower file is RO; eCryptfs "
-				"file must hence be opened RO\n", __func__);
-			break;
-		}
+		LOG_ERR("lower_file:%px\n", file_info->lower_file);
 		rc = 0;
 	} while (0);
 	//release memory
 	if (rc) {
-		LOG_ERR("Open File Error, Code:%d", rc);
+		LOG_ERR("Open File Error, Code:%d\n", rc);
 		teadfs_free(teadfs_file_to_private(file));
 		teadfs_set_file_private(file, NULL);
 	}
@@ -396,7 +416,7 @@ const struct file_operations teadfs_main_fops = {
 	.read = do_sync_read,
 	.aio_read = teadfs_read_update_atime,
 	.write = do_sync_write,
-	.aio_write = generic_file_aio_write,
+	.aio_write = teadfs_write,
 	.readdir = teadfs_readdir,
 	.unlocked_ioctl = teadfs_unlocked_ioctl,
 #ifdef CONFIG_COMPAT

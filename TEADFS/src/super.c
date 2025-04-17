@@ -62,6 +62,7 @@ static struct inode *teadfs_alloc_inode(struct super_block *sb)
 		inode_info = teadfs_zalloc(sizeof(struct teadfs_inode_info), GFP_KERNEL);
 		if (unlikely(!inode_info))
 			break;
+		inode_init_once(&(inode_info->vfs_inode));
 		mutex_init(&inode_info->lower_file_mutex);
 		atomic_set(&inode_info->lower_file_count, 0);
 		inode = &inode_info->vfs_inode;
@@ -96,7 +97,7 @@ static void teadfs_destroy_inode(struct inode *inode)
 	struct teadfs_inode_info *inode_info;
 	LOG_DBG("ENTRY\n");
 	inode_info = teadfs_inode_to_private(inode);
-	BUG_ON(inode_info->lower_inode);
+	//BUG_ON(!inode_info->lower_inode);
 	call_rcu(&inode->i_rcu, teadfs_i_callback);
 	LOG_DBG("LEVAL\n");
 }
