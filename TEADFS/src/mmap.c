@@ -23,10 +23,19 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 	struct file* file)
 {
 	struct file* lower_file;
-	lower_file = teadfs_file_to_lower(file);
-	if (!lower_file)
-		return -EIO;
-	return kernel_read(lower_file, offset, data, size);
+	int rc = 0;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		lower_file = teadfs_file_to_lower(file);
+		if (!lower_file) {
+			rc = -EIO;
+			break;
+		}
+		rc = kernel_read(lower_file, offset, data, size);
+	} while (0);
+	LOG_DBG("LEVAL %d\n", rc);
+	return rc;
 }
 
 
@@ -71,13 +80,11 @@ static int teadfs_readpage(struct file* file, struct page* page)
 	char* virt;
 	loff_t offset;
 
-
 	LOG_DBG("ENTRY\n");
-
 	do {
 		offset = (((loff_t)page->index) << PAGE_CACHE_SHIFT);
 		virt = kmap(page);
-		rc = teadfs_read_lower(virt, offset, PAGE_CACHE_SIZE, page->mapping->host);
+		rc = teadfs_read_lower(virt, offset, PAGE_CACHE_SIZE, file);
 		if (rc > 0)
 			rc = 0;
 		kunmap(page);

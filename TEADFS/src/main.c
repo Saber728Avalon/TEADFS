@@ -29,7 +29,7 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 	struct teadfs_dentry_info* root_info;
 	const char* err = "Getting sb failed";
 	struct inode* inode;
-	struct path path;
+	struct path lower_path;
 	int rc;
 	int release_path = 0;
 
@@ -62,14 +62,14 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 		s->s_d_op = &teadfs_dops;
 
 		err = "Reading sb failed";
-		rc = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &path);
+		rc = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &lower_path);
 		if (rc) {
 			LOG_ERR("kern_path() failed\n");
 			break;
 		}
 		release_path = 1;
 		//double mount is error
-		if (0 == strcmp(path.dentry->d_sb->s_type->name, "teadfs")) {
+		if (0 == strcmp(lower_path.dentry->d_sb->s_type->name, "teadfs")) {
 			rc = -EINVAL;
 			LOG_ERR("Mount on filesystem of type "
 				"eCryptfs explicitly disallowed due to "
@@ -77,27 +77,27 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 			break;
 		}
 
-		teadfs_set_superblock_lower(s, path.dentry->d_sb);
+		teadfs_set_superblock_lower(s, lower_path.dentry->d_sb);
 		/**
 		 * Set the POSIX ACL flag based on whether they're enabled in the lower
 		 * mount.
 		 */
 		s->s_flags = flags & ~MS_POSIXACL;
-		s->s_flags |= path.dentry->d_sb->s_flags & MS_POSIXACL;
+		s->s_flags |= lower_path.dentry->d_sb->s_flags & MS_POSIXACL;
 
 		/**
 		 * Force a read-only eCryptfs mount when:
 		 *   1) The lower mount is ro
 		 *   2) The ecryptfs_encrypted_view mount option is specified
 		 */
-		if (path.dentry->d_sb->s_flags & MS_RDONLY)
+		if (lower_path.dentry->d_sb->s_flags & MS_RDONLY)
 			s->s_flags |= MS_RDONLY;
 
-		s->s_maxbytes = path.dentry->d_sb->s_maxbytes;
-		s->s_blocksize = path.dentry->d_sb->s_blocksize;
-		s->s_magic = ECRYPTFS_SUPER_MAGIC;
+		s->s_maxbytes = lower_path.dentry->d_sb->s_maxbytes;
+		s->s_blocksize = lower_path.dentry->d_sb->s_blocksize;
+		s->s_magic = TEADFS_SUPER_MAGIC;
 
-		inode = teadfs_get_inode(path.dentry->d_inode, s);
+		inode = teadfs_get_inode(lower_path.dentry->d_inode, s);
 		rc = PTR_ERR(inode);
 		if (IS_ERR(inode))
 			break;
@@ -116,15 +116,15 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 
 		/* ->kill_sb() will take care of root_info */
 		teadfs_set_dentry_private(s->s_root, root_info);
-		teadfs_set_lower_path(s->s_root, &path);
-		LOG_ERR("dentry:%px mnt:%px\n", path.dentry, path.mnt);
+		teadfs_set_lower_path(s->s_root, &lower_path);
+		LOG_ERR("dentry:%px mnt:%px\n", lower_path.dentry, lower_path.mnt);
 		s->s_flags |= MS_ACTIVE;
 		LOG_DBG("Mount success\n");
 		return dget(s->s_root);
 	} while (0);
 
 	if (release_path) {
-		path_put(&path);
+		path_put(&lower_path);
 	}
 	if (s) {
 		deactivate_locked_super(s);

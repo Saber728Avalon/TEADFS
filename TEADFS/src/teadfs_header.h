@@ -63,22 +63,6 @@ static void teadfs_set_lower_super(struct super_block* super, struct teadfs_sb_i
 	super->s_fs_info = super_info;
 }
 
-/* path based (dentry/mnt) macros */
-static inline void pathcpy(struct path* dst, const struct path* src) {
-	dst->dentry = src->dentry;
-	dst->mnt = src->mnt;
-}
-static void teadfs_get_lower_path(const struct dentry* dentry, struct path* lower_path) {
-	pathcpy(lower_path, &((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path);
-	path_get(lower_path);
-	return;
-}
-
-static void teadfs_set_lower_path(const struct dentry* dentry, struct path* lower_path) {
-	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.dentry = lower_path->dentry;
-	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.mnt = lower_path->mnt;
-	return;
-}
 
 
 static void
@@ -93,12 +77,6 @@ static struct file* teadfs_file_to_lower(struct file* file)
 	return ((struct teadfs_file_info*)file->private_data)->lower_file;
 }
 
-static void
-teadfs_set_file_lower(struct file* file, struct file* lower_file)
-{
-	((struct teadfs_file_info*)file->private_data)->lower_file =
-		lower_file;
-}
 static inline struct teadfs_file_info*
 teadfs_file_to_private(struct file* file)
 {
@@ -129,11 +107,10 @@ teadfs_dentry_to_lower_path(struct dentry* dentry)
 {
 	return &((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path;
 }
-static inline void
-teadfs_set_dentry_lower(struct dentry* dentry, struct dentry* lower_dentry)
-{
-	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.dentry =
-		lower_dentry;
+static void teadfs_set_lower_path(const struct dentry* dentry, struct path* lower_path) {
+	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.dentry = lower_path->dentry;
+	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.mnt = lower_path->mnt;
+	return;
 }
 
 

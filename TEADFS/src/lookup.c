@@ -58,22 +58,30 @@ struct inode* __teadfs_get_inode(struct inode* lower_inode,
 	struct super_block* sb)
 {
 	struct inode* inode;
+
 	LOG_DBG("ENTRY\n");
-	// check inode to super block, if not equal. have error. 
-	if (lower_inode->i_sb != teadfs_superblock_to_lower(sb))
-		return ERR_PTR(-EXDEV);
-	if (!igrab(lower_inode))
-		return ERR_PTR(-ESTALE);
-	inode = iget5_locked(sb, (unsigned long)lower_inode,
-		teadfs_inode_test, teadfs_inode_set,
-		lower_inode);
-	if (!inode) {
-		iput(lower_inode);
-		return ERR_PTR(-EACCES);
-	}
-	if (!(inode->i_state & I_NEW))
-		iput(lower_inode);
-	LOG_DBG("LEAVE\n");
+	do {
+		// check inode to super block, if not equal. have error. 
+		if (lower_inode->i_sb != teadfs_superblock_to_lower(sb)) {
+			inode = ERR_PTR(-EXDEV);
+			break;
+		}
+		if (!igrab(lower_inode)) {
+			inode = ERR_PTR(-ESTALE);
+			break;
+		}
+		inode = iget5_locked(sb, (unsigned long)lower_inode,
+			teadfs_inode_test, teadfs_inode_set,
+			lower_inode);
+		if (!inode) {
+			iput(lower_inode);
+			inode = ERR_PTR(-EACCES);
+			break;
+		}
+		if (!(inode->i_state & I_NEW))
+			iput(lower_inode);
+	} while (0);
+	LOG_DBG("LEAVE inode:%px\n", inode);
 	return inode;
 }
 
@@ -89,6 +97,8 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 	struct teadfs_dentry_info* dentry_info;
 	struct vfsmount* lower_mnt;
 	int rc = 0;
+	struct path path;
+
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -106,8 +116,10 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 		fsstack_copy_attr_atime(dir_inode, lower_dentry->d_parent->d_inode);
 
 		teadfs_set_dentry_private(dentry, dentry_info);
-		teadfs_set_dentry_lower(dentry, lower_dentry);
-		teadfs_dentry_to_lower_path(dentry)->mnt = lower_mnt;
+
+		path.dentry = lower_dentry;
+		path.mnt = lower_mnt;
+		teadfs_set_lower_path(dentry, &path);
 
 		if (!lower_dentry->d_inode) {
 			/* We want to add because we couldn't find in lower */
@@ -149,7 +161,7 @@ struct dentry* teadfs_lookup(struct inode* ecryptfs_dir_inode,
 	struct dentry* lower_dir_dentry, * lower_dentry;
 	int rc = 0;
 
-	LOG_DBG("ENTRY\n");
+	LOG_DBG("ENTRY path:%s\n", ecryptfs_dentry->d_name.name);
 	do {
 		lower_dir_dentry = teadfs_dentry_to_lower(ecryptfs_dentry->d_parent);
 		mutex_lock(&lower_dir_dentry->d_inode->i_mutex);
@@ -182,7 +194,7 @@ struct inode* teadfs_get_inode(struct inode* lower_inode,
 	LOG_DBG("ENTRY\n");
 	if (!IS_ERR(inode) && (inode->i_state & I_NEW))
 		unlock_new_inode(inode);
-	LOG_DBG("LEAVE");
+	LOG_DBG("LEAVE\n");
 	return inode;
 }
 
@@ -208,6 +220,6 @@ int teadfs_interpose(struct dentry* lower_dentry,
 		return PTR_ERR(inode);
 	d_instantiate(dentry, inode);
 
-	LOG_DBG("LEAVE");
+	LOG_DBG("LEAVE\n");
 	return 0;
 }

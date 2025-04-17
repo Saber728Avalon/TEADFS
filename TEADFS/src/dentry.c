@@ -54,7 +54,7 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 	struct dentry *lower_dentry;
 	int rc = 1;
 
-	LOG_DBG("ENTRY\n");
+	
 	do {
 		if (flags & LOOKUP_RCU) {
 			rc = -ECHILD;
@@ -63,6 +63,8 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 		lower_dentry = teadfs_dentry_to_lower(dentry);
 		if (!lower_dentry->d_op || !lower_dentry->d_op->d_revalidate)
 			break;
+
+		LOG_DBG("ENTRY\n");
 		rc = lower_dentry->d_op->d_revalidate(lower_dentry, flags);
 		if (dentry->d_inode) {
 			struct inode* lower_inode =
@@ -70,8 +72,8 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 
 			fsstack_copy_attr_all(dentry->d_inode, lower_inode);
 		}
+		LOG_DBG("LEVAL rc:%d\n", rc);
 	} while (0);
-	LOG_DBG("LEVAL rc:%d\n", rc);
 	return rc;
 }
 
