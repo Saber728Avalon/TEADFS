@@ -170,7 +170,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 	struct path lower_path;
 	int flags = O_LARGEFILE;
 
-	LOG_DBG("ENTRY file:%s\n", teadfs_dentry->d_name.name);
+	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
 		/* Released in ecryptfs_release or end of function if failure */
 		file_info = teadfs_zalloc(sizeof(struct teadfs_file_info), GFP_KERNEL);
@@ -185,7 +185,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 		teadfs_get_lower_path(teadfs_dentry, &lower_path);
 		LOG_ERR("dentry:%px mnt:%px\n", lower_path.dentry, lower_path.mnt);
 		//check file flag
-		flags = file->f_flags;
+		flags |= file->f_flags;
 		flags |= IS_RDONLY(inode) ? O_RDONLY : O_RDWR;
 		file_info->lower_file = dentry_open(&lower_path, flags, current_cred());
 		path_put(&lower_path);
@@ -231,8 +231,13 @@ static int teadfs_flush(struct file *file, fl_owner_t td)
 
 static int teadfs_release(struct inode *inode, struct file *file)
 {
-	LOG_DBG("ENTRY\n");
-	teadfs_free(teadfs_file_to_private(file));
+	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
+	LOG_DBG("ENTRY file:%px\n", file);
+	if (file_info->lower_file) {
+		fput(file_info->lower_file);
+
+	}
+	teadfs_free(file_info);
 	LOG_DBG("LEVAL\n");
 	return 0;
 }

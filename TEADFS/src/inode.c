@@ -1,12 +1,15 @@
 #include "teadfs_log.h"
 #include "teadfs_header.h"
 #include "lookup.h"
+#include "config.h"
 
 #include <linux/fs.h>
 #include <linux/fs_stack.h>
 #include <linux/mm.h>
 #include <linux/xattr.h>
 #include <linux/module.h>
+#include <linux/uaccess.h>
+#include <linux/namei.h>
 
 static struct dentry* lock_parent(struct dentry* dentry)
 {
@@ -23,7 +26,7 @@ static void unlock_dir(struct dentry* dir)
 	dput(dir);
 }
 
-static int wrapfs_create(struct inode* dir, struct dentry* dentry,
+static int teadfs_create(struct inode* dir, struct dentry* dentry,
 	umode_t mode, bool want_excl)
 {
 	int rc;
@@ -70,7 +73,7 @@ static int wrapfs_create(struct inode* dir, struct dentry* dentry,
 	} while (0);
 
 	unlock_dir(lower_parent_dentry);
-	LOG_DBG("rc = [%d]\n", rc);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return rc;
 }
 
@@ -91,7 +94,7 @@ static int teadfs_getattr(struct vfsmount* mnt, struct dentry* dentry,
 		generic_fillattr(dentry->d_inode, stat);
 		stat->blocks = lower_stat.blocks;
 	}
-	LOG_DBG("rc = [%d]\n", rc);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return rc;
 }
 
@@ -146,7 +149,7 @@ static int teadfs_setattr(struct dentry* dentry, struct iattr* ia)
 		mutex_unlock(&lower_dentry->d_inode->i_mutex);
 	} while (0);
 	fsstack_copy_attr_all(inode, lower_inode);
-	LOG_DBG("rc = [%d]\n", rc);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return rc;
 }
 
@@ -171,56 +174,447 @@ teadfs_setxattr(struct dentry* dentry, const char* name, const void* value,
 		if (!rc && dentry->d_inode)
 			fsstack_copy_attr_all(dentry->d_inode, lower_dentry->d_inode);
 	} while (0);
-	LOG_DBG("rc = [%d]\n", rc);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+
+static int teadfs_readlink_lower(struct dentry* dentry, char** buf,
+	size_t* bufsiz)
+{
+	struct dentry* lower_dentry = teadfs_dentry_to_lower(dentry);
+	mm_segment_t old_fs;
+	int rc;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		old_fs = get_fs();
+		set_fs(get_ds());
+		rc = lower_dentry->d_inode->i_op->readlink(lower_dentry,
+			(char __user*)buf,
+			PATH_MAX);
+		set_fs(old_fs);
+		if (rc < 0)
+			break;
+	} while (0);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+static void* teadfs_follow_link(struct dentry* dentry, struct nameidata* nd)
+{
+	char* buf;
+	size_t len = PATH_MAX;
+	int rc;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		rc = teadfs_readlink_lower(dentry, &buf, &len);
+		if (rc)
+			break;
+		fsstack_copy_attr_atime(dentry->d_inode,
+			teadfs_dentry_to_lower(dentry)->d_inode);
+		buf[len] = '\0';
+	} while (0);
+	nd_set_link(nd, buf);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return NULL;
+}
+
+static int teadfs_link(struct dentry* old_dentry, struct inode* dir,
+	struct dentry* new_dentry)
+{
+	struct dentry* lower_old_dentry;
+	struct dentry* lower_new_dentry;
+	struct dentry* lower_dir_dentry;
+	u64 file_size_save;
+	int rc;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		file_size_save = i_size_read(old_dentry->d_inode);
+		lower_old_dentry = teadfs_dentry_to_lower(old_dentry);
+		lower_new_dentry = teadfs_dentry_to_lower(new_dentry);
+		dget(lower_old_dentry);
+		dget(lower_new_dentry);
+		lower_dir_dentry = lock_parent(lower_new_dentry);
+		rc = vfs_link(lower_old_dentry, lower_dir_dentry->d_inode,
+			lower_new_dentry
+#if defined(CONFIG_VFS_LINK_4_PARAM)
+			, NULL
+#endif	
+		);
+		if (rc || !lower_new_dentry->d_inode)
+			break;
+		rc = teadfs_interpose(lower_new_dentry, new_dentry, dir->i_sb);
+		if (rc)
+			break;
+		fsstack_copy_attr_times(dir, lower_dir_dentry->d_inode);
+		fsstack_copy_inode_size(dir, lower_dir_dentry->d_inode);
+		set_nlink(old_dentry->d_inode,
+			teadfs_inode_to_lower(old_dentry->d_inode)->i_nlink);
+		i_size_write(new_dentry->d_inode, file_size_save);
+	} while (0);
+
+	unlock_dir(lower_dir_dentry);
+	dput(lower_new_dentry);
+	dput(lower_old_dentry);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return rc;
 }
 
 
 
 
+static int teadfs_unlink(struct inode* dir, struct dentry* dentry)
+{
+	struct dentry* lower_dentry = teadfs_dentry_to_lower(dentry);
+	struct inode* lower_dir_inode = teadfs_inode_to_lower(dir);
+	struct dentry* lower_dir_dentry;
+	int rc;
+	struct inode* inode = dentry->d_inode;
 
+	LOG_DBG("ENTRY\n");
+	do {
+		dget(lower_dentry);
+		lower_dir_dentry = lock_parent(lower_dentry);
+		rc = vfs_unlink(lower_dir_inode, lower_dentry
+#if defined(CONFIG_VFS_UNLINK_4_PARAM)
+			,NULL
+#endif
+			);
+		if (rc) {
+			printk(KERN_ERR "Error in vfs_unlink; rc = [%d]\n", rc);
+			break;
+		}
+		fsstack_copy_attr_times(dir, lower_dir_inode);
+		set_nlink(inode, teadfs_inode_to_lower(inode)->i_nlink);
+		inode->i_ctime = dir->i_ctime;
+		d_drop(dentry);
+
+	} while (0);
+
+	unlock_dir(lower_dir_dentry);
+	dput(lower_dentry);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+static void
+teadfs_put_link(struct dentry* dentry, struct nameidata* nd, void* ptr)
+{
+	char* buf = nd_get_link(nd);
+	if (!IS_ERR(buf)) {
+		/* Free the char* */
+		kfree(buf);
+	}
+	LOG_DBG("LEAVE \n");
+}
+
+static int
+teadfs_permission(struct inode* inode, int mask)
+{
+	return inode_permission(teadfs_inode_to_lower(inode), mask);
+}
+
+
+
+static int teadfs_getattr_link(struct vfsmount* mnt, struct dentry* dentry,
+	struct kstat* stat)
+{
+	int rc = 0;
+
+	LOG_DBG("ENTRY\n");
+	generic_fillattr(dentry->d_inode, stat);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+
+
+static ssize_t
+teadfs_getxattr(struct dentry* dentry, const char* name, void* value,
+	size_t size)
+{
+	int rc = 0;
+	struct dentry* lower_dentry = teadfs_dentry_to_lower(dentry);
+
+	LOG_DBG("ENTRY\n");
+	do {
+		if (!lower_dentry->d_inode->i_op->getxattr) {
+			rc = -EOPNOTSUPP;
+			break;
+		}
+		mutex_lock(&lower_dentry->d_inode->i_mutex);
+		rc = lower_dentry->d_inode->i_op->getxattr(lower_dentry, name, value,
+			size);
+		mutex_unlock(&lower_dentry->d_inode->i_mutex);
+	} while (0);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+
+
+static ssize_t
+teadfs_listxattr(struct dentry* dentry, char* list, size_t size)
+{
+	int rc = 0;
+	struct dentry* lower_dentry;
+
+
+	LOG_DBG("ENTRY\n");
+	do {
+		lower_dentry = teadfs_dentry_to_lower(dentry);
+		if (!lower_dentry->d_inode->i_op->listxattr) {
+			rc = -EOPNOTSUPP;
+			break;
+		}
+		mutex_lock(&lower_dentry->d_inode->i_mutex);
+		rc = lower_dentry->d_inode->i_op->listxattr(lower_dentry, list, size);
+		mutex_unlock(&lower_dentry->d_inode->i_mutex);
+	} while (0);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+static int teadfs_removexattr(struct dentry* dentry, const char* name)
+{
+	int rc = 0;
+	struct dentry* lower_dentry;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		lower_dentry = teadfs_dentry_to_lower(dentry);
+		if (!lower_dentry->d_inode->i_op->removexattr) {
+			rc = -EOPNOTSUPP;
+			break;
+		}
+		mutex_lock(&lower_dentry->d_inode->i_mutex);
+		rc = lower_dentry->d_inode->i_op->removexattr(lower_dentry, name);
+		mutex_unlock(&lower_dentry->d_inode->i_mutex);
+	} while (0);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+
+static int teadfs_symlink(struct inode* dir, struct dentry* dentry,
+	const char* symname)
+{
+	int rc;
+	struct dentry* lower_dentry;
+	struct dentry* lower_dir_dentry;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		lower_dentry = teadfs_dentry_to_lower(dentry);
+		dget(lower_dentry);
+		lower_dir_dentry = lock_parent(lower_dentry);
+		rc = vfs_symlink(lower_dir_dentry->d_inode, lower_dentry,
+			symname);
+		if (rc || !lower_dentry->d_inode)
+			break;
+		rc = teadfs_interpose(lower_dentry, dentry, dir->i_sb);
+		if (rc)
+			break;
+		fsstack_copy_attr_times(dir, lower_dir_dentry->d_inode);
+		fsstack_copy_inode_size(dir, lower_dir_dentry->d_inode);
+	} while (0);
+
+	unlock_dir(lower_dir_dentry);
+	dput(lower_dentry);
+	if (!dentry->d_inode)
+		d_drop(dentry);
+
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+static int teadfs_mkdir(struct inode* dir, struct dentry* dentry, umode_t mode)
+{
+	int rc;
+	struct dentry* lower_dentry;
+	struct dentry* lower_dir_dentry;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		lower_dentry = teadfs_dentry_to_lower(dentry);
+		lower_dir_dentry = lock_parent(lower_dentry);
+		rc = vfs_mkdir(lower_dir_dentry->d_inode, lower_dentry, mode);
+		if (rc || !lower_dentry->d_inode)
+			break;
+		rc =teadfs_interpose(lower_dentry, dentry, dir->i_sb);
+		if (rc)
+			break;
+		fsstack_copy_attr_times(dir, lower_dir_dentry->d_inode);
+		fsstack_copy_inode_size(dir, lower_dir_dentry->d_inode);
+		set_nlink(dir, lower_dir_dentry->d_inode->i_nlink);
+	} while (0);
+
+	unlock_dir(lower_dir_dentry);
+	if (!dentry->d_inode)
+		d_drop(dentry);
+
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+static int teadfs_rmdir(struct inode* dir, struct dentry* dentry)
+{
+	struct dentry* lower_dentry;
+	struct dentry* lower_dir_dentry;
+	int rc;
+
+	LOG_DBG("ENTRY\n");
+	lower_dentry = teadfs_dentry_to_lower(dentry);
+	dget(dentry);
+	lower_dir_dentry = lock_parent(lower_dentry);
+	dget(lower_dentry);
+	rc = vfs_rmdir(lower_dir_dentry->d_inode, lower_dentry);
+	dput(lower_dentry);
+	if (!rc && dentry->d_inode)
+		clear_nlink(dentry->d_inode);
+	fsstack_copy_attr_times(dir, lower_dir_dentry->d_inode);
+	set_nlink(dir, lower_dir_dentry->d_inode->i_nlink);
+	unlock_dir(lower_dir_dentry);
+	if (!rc)
+		d_drop(dentry);
+	dput(dentry);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+static int
+teadfs_mknod(struct inode* dir, struct dentry* dentry, umode_t mode, dev_t dev)
+{
+	int rc;
+	struct dentry* lower_dentry;
+	struct dentry* lower_dir_dentry;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		lower_dentry = teadfs_dentry_to_lower(dentry);
+		lower_dir_dentry = lock_parent(lower_dentry);
+		rc = vfs_mknod(lower_dir_dentry->d_inode, lower_dentry, mode, dev);
+		if (rc || !lower_dentry->d_inode)
+			break;
+		rc = teadfs_interpose(lower_dentry, dentry, dir->i_sb);
+		if (rc)
+			break;
+		fsstack_copy_attr_times(dir, lower_dir_dentry->d_inode);
+		fsstack_copy_inode_size(dir, lower_dir_dentry->d_inode);
+	} while (0);
+
+	unlock_dir(lower_dir_dentry);
+	if (!dentry->d_inode)
+		d_drop(dentry);
+
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
+
+static int
+teadfs_rename(struct inode* old_dir, struct dentry* old_dentry,
+	struct inode* new_dir, struct dentry* new_dentry)
+{
+	int rc;
+	struct dentry* lower_old_dentry;
+	struct dentry* lower_new_dentry;
+	struct dentry* lower_old_dir_dentry;
+	struct dentry* lower_new_dir_dentry;
+	struct dentry* trap = NULL;
+	struct inode* target_inode;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		lower_old_dentry = teadfs_dentry_to_lower(old_dentry);
+		lower_new_dentry = teadfs_dentry_to_lower(new_dentry);
+		dget(lower_old_dentry);
+		dget(lower_new_dentry);
+		lower_old_dir_dentry = dget_parent(lower_old_dentry);
+		lower_new_dir_dentry = dget_parent(lower_new_dentry);
+		target_inode = new_dentry->d_inode;
+		trap = lock_rename(lower_old_dir_dentry, lower_new_dir_dentry);
+		/* source should not be ancestor of target */
+		if (trap == lower_old_dentry) {
+			rc = -EINVAL;
+			break;
+		}
+		/* target should not be ancestor of source */
+		if (trap == lower_new_dentry) {
+			rc = -ENOTEMPTY;
+			break;
+		}
+		rc = vfs_rename(lower_old_dir_dentry->d_inode, lower_old_dentry,
+			lower_new_dir_dentry->d_inode, lower_new_dentry
+#if defined(CONFIG_VFS_RENAME_6_PARAM)
+			, NULL
+			, 0
+#endif
+		);
+		if (rc)
+			break;
+		if (target_inode)
+			fsstack_copy_attr_all(target_inode,
+				teadfs_inode_to_lower(target_inode));
+		fsstack_copy_attr_all(new_dir, lower_new_dir_dentry->d_inode);
+		if (new_dir != old_dir)
+			fsstack_copy_attr_all(old_dir, lower_old_dir_dentry->d_inode);
+
+	} while (0);
+
+	unlock_rename(lower_old_dir_dentry, lower_new_dir_dentry);
+	dput(lower_new_dir_dentry);
+	dput(lower_old_dir_dentry);
+	dput(lower_new_dentry);
+	dput(lower_old_dentry);
+
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
 
 
 
 const struct inode_operations teadfs_symlink_iops = {
-	//.readlink = generic_readlink,
-	//.follow_link = ecryptfs_follow_link,
-	//.put_link = ecryptfs_put_link,
-	//.permission = ecryptfs_permission,
-	.setattr = teadfs_setattr,
-	//.getattr = ecryptfs_getattr_link,
-	.setxattr = teadfs_setxattr,
-	//.getxattr = ecryptfs_getxattr,
-	//.listxattr = ecryptfs_listxattr,
-	//.removexattr = ecryptfs_removexattr
+	.readlink		= generic_readlink,
+	.follow_link	= teadfs_follow_link,
+	.put_link		= teadfs_put_link,
+	.permission		= teadfs_permission,
+	.setattr		= teadfs_setattr,
+	.getattr		= teadfs_getattr_link,
+	.setxattr		= teadfs_setxattr,
+	.getxattr		= teadfs_getxattr,
+	.listxattr		= teadfs_listxattr,
+	.removexattr	= teadfs_removexattr
 };
 
 const struct inode_operations teadfs_dir_iops = {
-	//.create = teadfs_create,
-	.lookup = teadfs_lookup,
-	//.link = ecryptfs_link,
-	//.unlink = ecryptfs_unlink,
-	//.symlink = ecryptfs_symlink,
-	//.mkdir = ecryptfs_mkdir,
-	//.rmdir = ecryptfs_rmdir,
-	//.mknod = ecryptfs_mknod,
-	//.rename = ecryptfs_rename,
-	//.permission = ecryptfs_permission,
-	.setattr = teadfs_setattr,
-	.setxattr = teadfs_setxattr,
-	//.getxattr = ecryptfs_getxattr,
-	//.listxattr = ecryptfs_listxattr,
-	//.removexattr = ecryptfs_removexattr
+	.create			= teadfs_create,
+	.lookup			= teadfs_lookup,
+	.link			= teadfs_link,
+	.unlink			= teadfs_unlink,
+	.symlink		= teadfs_symlink,
+	.mkdir			= teadfs_mkdir,
+	.rmdir			= teadfs_rmdir,
+	.mknod			= teadfs_mknod,
+	.rename			= teadfs_rename,
+	.permission		= teadfs_permission,
+	.setattr		= teadfs_setattr,
+	.setxattr		= teadfs_setxattr,
+	.getxattr		= teadfs_getxattr,
+	.listxattr		= teadfs_listxattr,
+	.removexattr	= teadfs_removexattr
 };
 
 const struct inode_operations teadfs_main_iops = {
-	//.permission = ecryptfs_permission,
-	.setattr = teadfs_setattr,
-	.getattr = teadfs_getattr,
-	.setxattr = teadfs_setxattr,
-	//.getxattr = ecryptfs_getxattr,
-	//.listxattr = ecryptfs_listxattr,
-	//.removexattr = ecryptfs_removexattr
+	.permission		= teadfs_permission,
+	.setattr		= teadfs_setattr,
+	.getattr		= teadfs_getattr,
+	.setxattr		= teadfs_setxattr,
+	.getxattr		= teadfs_getxattr,
+	.listxattr		= teadfs_listxattr,
+	.removexattr	= teadfs_removexattr
 };
 
 

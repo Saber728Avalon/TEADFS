@@ -26,6 +26,7 @@ static int teadfs_inode_set(struct inode* inode, void* opaque)
 {
 	struct inode* lower_inode = opaque;
 
+	LOG_DBG("ENTRY\n");
 	teadfs_set_inode_lower(inode, lower_inode);
 	fsstack_copy_attr_all(inode, lower_inode);
 	/* i_size will be overwritten for encrypted regular files */
@@ -48,7 +49,7 @@ static int teadfs_inode_set(struct inode* inode, void* opaque)
 		init_special_inode(inode, inode->i_mode, inode->i_rdev);
 	else
 		inode->i_fop = &teadfs_main_fops;
-
+	LOG_DBG("LEAVE\n");
 	return 0;
 }
 
@@ -57,7 +58,7 @@ struct inode* __teadfs_get_inode(struct inode* lower_inode,
 	struct super_block* sb)
 {
 	struct inode* inode;
-
+	LOG_DBG("ENTRY\n");
 	// check inode to super block, if not equal. have error. 
 	if (lower_inode->i_sb != teadfs_superblock_to_lower(sb))
 		return ERR_PTR(-EXDEV);
@@ -72,7 +73,7 @@ struct inode* __teadfs_get_inode(struct inode* lower_inode,
 	}
 	if (!(inode->i_state & I_NEW))
 		iput(lower_inode);
-
+	LOG_DBG("LEAVE\n");
 	return inode;
 }
 
@@ -178,8 +179,35 @@ struct inode* teadfs_get_inode(struct inode* lower_inode,
 	struct super_block* sb) {
 	struct inode* inode = __teadfs_get_inode(lower_inode, sb);
 
+	LOG_DBG("ENTRY\n");
 	if (!IS_ERR(inode) && (inode->i_state & I_NEW))
 		unlock_new_inode(inode);
-
+	LOG_DBG("LEAVE");
 	return inode;
+}
+
+
+/**
+ * teadfs_interpose
+ * @lower_dentry: Existing dentry in the lower filesystem
+ * @dentry: ecryptfs' dentry
+ * @sb: ecryptfs's super_block
+ *
+ * Interposes upper and lower dentries.
+ *
+ * Returns zero on success; non-zero otherwise
+ */
+int teadfs_interpose(struct dentry* lower_dentry,
+	struct dentry* dentry, struct super_block* sb)
+{
+	struct inode* inode = teadfs_get_inode(lower_dentry->d_inode, sb);
+
+	LOG_DBG("ENTRY\n");
+
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
+	d_instantiate(dentry, inode);
+
+	LOG_DBG("LEAVE");
+	return 0;
 }
