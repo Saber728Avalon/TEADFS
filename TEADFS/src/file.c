@@ -30,6 +30,7 @@
 #include "teadfs_log.h"
 #include "config.h"
 
+#include <linux/fs.h>
 #include <linux/file.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
@@ -103,35 +104,49 @@ static ssize_t teadfs_write(struct kiocb* iocb,
 	return rc;
 }
 
-struct teadfs_getdents_callback {
-	void *dirent;
-	struct dentry *dentry;
-	filldir_t filldir;
-	int filldir_called;
-	int entries_written;
-};
 
-/* Inspired by generic filldir in fs/readdir.c */
-static int
-teadfs_filldir(void *dirent, const char *lower_name, int lower_namelen,
-		 loff_t offset, u64 ino, unsigned int d_type)
-{
-	struct teadfs_getdents_callback *buf =
-	    (struct teadfs_getdents_callback *)dirent;
-	size_t name_size;
-	char *name;
-	int rc;
+#if defined(CONFIG_ITERATE_DIR)
+#else
+	#if defined(RHEL_RELEASE)
+		struct teadfs_getdents_callback {
+			struct dir_context ctx;
+			void* dirent;
+			struct dentry* dentry;
+			filldir_t filldir;
+			int filldir_called;
+			int entries_written;
+		};
+	#else
+		struct teadfs_getdents_callback {
+			void *dirent;
+			struct dentry *dentry;
+			filldir_t filldir;
+			int filldir_called;
+			int entries_written;
+		};
+	#endif 
+    
 
-	LOG_DBG("ENTRY\n");
-	buf->filldir_called++;
-	rc = buf->filldir(buf->dirent, name, name_size, offset, ino, d_type);
-	kfree(name);
-	if (rc >= 0)
-		buf->entries_written++;
+	/* Inspired by generic filldir in fs/readdir.c */
+	static int
+		teadfs_filldir(void* dirent, const char* lower_name, int lower_namelen,
+			loff_t offset, u64 ino, unsigned int d_type)
+	{
+		struct teadfs_getdents_callback* buf =
+			(struct teadfs_getdents_callback*)dirent;
+		int rc;
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
-	return rc;
-}
+		LOG_DBG("ENTRY\n");
+		buf->filldir_called++;
+		rc = buf->filldir(buf->dirent, lower_name, lower_namelen, offset, ino, d_type);
+		if (rc >= 0)
+			buf->entries_written++;
+
+		LOG_DBG("LEVAL rc:%d\n", rc);
+		return rc;
+	}
+
+#endif
 
 /**
  * ecryptfs_readdir
@@ -149,7 +164,10 @@ teadfs_filldir(void *dirent, const char *lower_name, int lower_namelen,
 	int rc;
 	struct file *lower_file;
 	struct inode *inode;
+#if defined(CONFIG_ITERATE_DIR)
+#else
 	struct teadfs_getdents_callback buf;
+#endif
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -159,13 +177,25 @@ teadfs_filldir(void *dirent, const char *lower_name, int lower_namelen,
 #if defined(CONFIG_ITERATE_DIR)
 		rc = iterate_dir(lower_file, ctx);
 #else
+		//centos 7.5 kernel must use iterate_dir
+	#if defined(RHEL_RELEASE)
 		memset(&buf, 0, sizeof(buf));
 		buf.dirent = dirent;
 		buf.dentry = file->f_path.dentry;
 		buf.filldir = filldir;
 		buf.filldir_called = 0;
 		buf.entries_written = 0;
-		rc = vfs_readdir(lower_file, teadfs_filldir, (void*)&buf);
+		buf.ctx.actor = teadfs_filldir;
+		rc = iterate_dir(lower_file, &buf.ctx);
+	#else
+			memset(&buf, 0, sizeof(buf));
+			buf.dirent = dirent;
+			buf.dentry = file->f_path.dentry;
+			buf.filldir = filldir;
+			buf.filldir_called = 0;
+			buf.entries_written = 0;
+			rc = vfs_readdir(lower_file, teadfs_filldir, (void*)&buf);
+	#endif
 #endif
 		file->f_pos = lower_file->f_pos;
 		if (rc < 0)
@@ -310,8 +340,8 @@ static int teadfs_flush(struct file *file, fl_owner_t td)
 {
 	struct file *lower_file = teadfs_file_to_lower(file);
 	int rc = 0;
-	LOG_DBG("ENTRY\n");
 
+	LOG_DBG("ENTRY file:%px lower_file:%px\n", file, lower_file);
 	if (lower_file->f_op && lower_file->f_op->flush) {
 		filemap_write_and_wait(file->f_mapping);
 		rc = lower_file->f_op->flush(lower_file, td);
@@ -323,11 +353,11 @@ static int teadfs_flush(struct file *file, fl_owner_t td)
 static int teadfs_release(struct inode *inode, struct file *file)
 {
 	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
-	LOG_DBG("ENTRY file:%px\n", file);
+	LOG_DBG("ENTRY file:%px lower_file:%px\n", file, file_info->lower_file);
 	if (file_info->lower_file) {
 		fput(file_info->lower_file);
-
 	}
+	teadfs_set_file_private(file, NULL);
 	teadfs_free(file_info);
 	LOG_DBG("LEVAL\n");
 	return 0;

@@ -14,6 +14,7 @@
 #endif
 
 #if LINUX_VERSION_CODE <  KERNEL_VERSION(3, 11, 0)
+#else
 	#define CONFIG_ITERATE_DIR 
 #endif
 
