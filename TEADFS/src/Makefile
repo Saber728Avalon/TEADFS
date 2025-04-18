@@ -4,7 +4,7 @@ ifndef KPATH
 endif
 PWD :=$(shell pwd)
 obj-m += $(MOD).o
-$(MOD)-y := main.o teadfs_log.o inode.o super.o lookup.o mmap.o dentry.o file.o 
+$(MOD)-y := main.o teadfs_log.o inode.o super.o lookup.o mmap.o dentry.o file.o netlink.o
 ccflags-y = -D__KERNEL__ -DMODULE -O0 -Wall -fstack-protector
 
 

@@ -4,6 +4,7 @@
 #include "lookup.h"
 #include "dentry.h"
 #include "super.h"
+#include "netlink.h"
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -180,6 +181,8 @@ static int __init teadfs_module_init(void) {
             LOG_ERR("Failed to register filesystem\n");
             break;
         }
+		//create netlink
+		start_netlink();
     } while (0);
     LOG_DBG("LEVAL\n");
     return 0;
@@ -188,6 +191,8 @@ static int __init teadfs_module_init(void) {
 static void __exit teadfs_module_exit(void) {
     LOG_DBG("ENTRY\n");
     unregister_filesystem(&teadfs_fs_type);
+
+	release_netlink();
     LOG_DBG("LEVAL\n");
 }
 
