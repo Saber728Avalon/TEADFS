@@ -42,6 +42,22 @@ struct teadfs_inode_info {
 };
 
 
+struct teadfs_msg_ctx {
+#define TEADFS_MSG_CTX_STATE_FREE     0x01
+#define TEADFS_MSG_CTX_STATE_PENDING  0x02
+#define TEADFS_MSG_CTX_STATE_DONE     0x03
+#define TEADFS_MSG_CTX_STATE_NO_REPLY 0x04
+	u8 state;
+	size_t request_msg_size;
+	char* request_msg;
+	size_t response_msg_size;
+	char* response_msg;
+	struct list_head out_list;
+	struct mutex mux;
+	struct wait_queue_head_t wait;
+};
+
+
 /* superblock to private data */
 static struct teadfs_sb_info* teadfs_get_super_block(struct super_block *super) {
 	return ((struct teadfs_sb_info*)(super)->s_fs_info);
