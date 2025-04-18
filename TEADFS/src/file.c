@@ -276,13 +276,15 @@ static int teadfs_open(struct inode *inode, struct file *file)
 		LOG_ERR("dentry:%px mnt:%px   lower_path:%px\n", lower_path->dentry, lower_path->mnt, lower_path);
 		//check file flag
 		flags |= file->f_flags;
-		flags |= IS_RDONLY(inode) ? O_RDONLY : O_RDWR;
-
-		//rc = teadfs_privileged_open(&file_info->lower_file, lower_path, current_cred());
-		//if (rc) {
-		//	LOG_ERR("Error Open File:%d\n", rc);
-		//	break;
-		//}
+		//only write will not support in mmap to read file. so add read
+		LOG_ERR("flags:%x\n", flags);
+		LOG_ERR("flags1:%x O_WRONLY:%x\n", flags & O_ACCMODE, O_WRONLY);
+		if ((flags & O_ACCMODE) == O_WRONLY) {
+			flags ^= O_WRONLY;
+			LOG_ERR("flags:%x\n", flags);
+			flags |= O_RDWR;
+		}
+		LOG_ERR("flags:%x\n", flags);
 		file_info->lower_file = dentry_open(lower_path, flags, current_cred());
 		if (IS_ERR(file_info->lower_file)) {
 			rc = PTR_ERR(file_info->lower_file);

@@ -58,11 +58,19 @@ int teadfs_write_lower(struct file* file, char* data,
 	struct file* lower_file;
 	ssize_t rc;
 
-	lower_file = teadfs_file_to_lower(lower_file);
-	if (!lower_file)
-		return -EIO;
-	rc = kernel_write(lower_file, data, size, offset);
-	mark_inode_dirty_sync(file->f_inode);
+	LOG_DBG("ENTRY\n");
+	do {
+
+		lower_file = teadfs_file_to_lower(file);
+		if (!lower_file) {
+			rc = -EIO;
+			break;
+		}
+		LOG_ERR("file:%px, lower_file:%px\n", file, lower_file);
+		rc = kernel_write(lower_file, data, size, offset);
+		mark_inode_dirty_sync(file->f_inode);
+	} while (0);
+	LOG_DBG("LEVAL %d\n", rc);
 	return rc;
 }
 
@@ -223,7 +231,7 @@ static int teadfs_write_end(struct file* file,
 
 	offset = (((loff_t)page->index) << PAGE_CACHE_SHIFT);
 	virt = kmap(page);
-	rc = teadfs_write_lower(ecryptfs_inode, virt, offset, to);
+	rc = teadfs_write_lower(file, virt, offset, to);
 	if (rc > 0)
 		rc = 0;
 	kunmap(page);
