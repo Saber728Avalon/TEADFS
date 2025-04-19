@@ -1,5 +1,5 @@
 #include "global_param.h"
-
+#include "teadfs_log.h"
 
 struct global_param {
 	struct mutex mux;
@@ -48,5 +48,5 @@ __u64 teadfs_get_next_msg_id(void) {
 }
 
 struct comm_msg_queue* teadfs_get_msg_queue(void) {
-	reutnr &g_comm_msg_queue;
+	return &g_comm_msg_queue;
 }

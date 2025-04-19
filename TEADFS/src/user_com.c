@@ -3,8 +3,10 @@
 #include "teadfs_log.h"
 #include "protocol.h"
 #include "global_param.h"
+#include "teadfs_header.h"
 
 #include <linux/fs.h>
+#include <linux/sched.h>
 
 
 // blocked current thead, to wait R3 deal.
@@ -22,7 +24,7 @@ static void teadfs_request_wait_answer(struct teadfs_msg_ctx* ctx) {
 			break;
 		}
 		// wait R3 deal result
-		rc = wait_event_timeout(&ctx->wait, ctx->state == TEADFS_MSG_CTX_STATE_DONE, msecs_to_jiffies(30000));
+		rc = wait_event_timeout(ctx->wait, ctx->state == TEADFS_MSG_CTX_STATE_DONE, 30 * HZ);
 		if (!rc) {
 			LOG_ERR("wait_event_timeout.\n");
 			mutex_lock(&(ctx->mux));
@@ -32,7 +34,7 @@ static void teadfs_request_wait_answer(struct teadfs_msg_ctx* ctx) {
 			mutex_unlock(&(ctx->mux));
 			break;
 		}
-	}
+	} while (0);
 	LOG_DBG("LEVAL rc:%d\n", rc);
 	return;
 }
@@ -88,12 +90,12 @@ int teadfs_request_open(struct file* file) {
 	LOG_DBG("ENTRY\n");
 	do {
 		// get file path
-		buffer = teadfs_zalloc(MAX_PATH, GFP_KERNEL);
+		buffer = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
 		if (!buffer) {
 			rc = -ENOMEM;
 			break;
 		}
-		file_path_start = dentry_path_raw(teadfs_dentry, buffer, MAX_PATH);
+		file_path_start = dentry_path_raw(teadfs_dentry, buffer, PATH_MAX);
 		file_path_size = strlen(file_path_start);
 
 		//get current process id
@@ -106,16 +108,16 @@ int teadfs_request_open(struct file* file) {
 			rc = -ENOMEM;
 			break;
 		}
-		packet = (struct teadfs_packet_info)(buffer);
+		packet = (struct teadfs_packet_info *)(buffer);
 		packet->header.msg_id = teadfs_get_next_msg_id();
 		packet->header.msg_type = PR_MSG_OPEN;
 		packet->header.pid = kpid;
-		packet->header.uid = 0;
-		packet->header.gid = 0;
+		packet->header.uid = KUIDT_INIT(0);
+		packet->header.gid = KGIDT_INIT(0);
 		
-		packet->open.file_id = file;
-		packet->open.file_path.size = file_path_size;
-		packet->open.file_path.offset = sizeof(struct teadfs_packet_info);
+		packet->data.open.file_id = (__u64)file;
+		packet->data.open.file_path.size = file_path_size;
+		packet->data.open.file_path.offset = sizeof(struct teadfs_packet_info);
 		memcpy(buffer + sizeof(struct teadfs_packet_info), file_path_start, file_path_size);
 
 		LOG_DBG("msg_id:0x%llx, msg_type:%d, pid:%d, uid:%d, gid:%d\n"

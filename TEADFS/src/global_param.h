@@ -2,6 +2,8 @@
 #define __GLOBAL_PARAM_H___
 
 
+#include <linux/fs.h>
+
 struct comm_msg_queue {
 	struct mutex mux;
 	struct list_head msg_ctx_queue;

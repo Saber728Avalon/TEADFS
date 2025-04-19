@@ -1,6 +1,13 @@
 #ifndef __PROTOCOL_H___
 #define __PROTOCOL_H___
 
+#if defined(__KERNEL__)
+	#include <linux/fs.h>
+	#include <linux/types.h>
+#else
+	#include <iostream>
+#endif
+
 
 #define PR_MSG_HELLO 1
 #define PR_MSG_CLOSE 2
@@ -78,7 +85,7 @@ struct teadfs_packet_info
 		struct teadfs_release_info release;
 		struct teadfs_read_info read;
 		struct teadfs_write_info write;
-	};
+	} data;
 };
 
 

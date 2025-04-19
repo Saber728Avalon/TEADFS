@@ -5,6 +5,7 @@
 
 #include <linux/fs.h>
 #include <linux/path.h>
+#include <linux/wait.h>
 #if defined(CONFIG_BDICONFIG_BDI)
 	#include <linux/backing-dev.h>
 #endif
@@ -54,7 +55,7 @@ struct teadfs_msg_ctx {
 	char* response_msg;
 	struct list_head out_list;
 	struct mutex mux;
-	struct wait_queue_head_t wait;
+	wait_queue_head_t wait;
 };
 
 
