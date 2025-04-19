@@ -5,6 +5,7 @@
 #include "dentry.h"
 #include "super.h"
 #include "netlink.h"
+#include "global_param.h"
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -183,6 +184,9 @@ static int __init teadfs_module_init(void) {
         }
 		//create netlink
 		start_netlink();
+
+		//init param
+		teadfs_init_global_param();
     } while (0);
     LOG_DBG("LEVAL\n");
     return 0;

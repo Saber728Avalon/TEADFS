@@ -23,12 +23,12 @@ enum OPEN_FILE_RESULT {
 	OFR_COUNT
 };
 
-struct protocol_binary {
+struct teadfs_protocol_binary {
 	__u32 size;
-	char* data;
+	__u32 offset; //data offset in buffer start
 };
 
-struct packet_header {
+struct teadfs_packet_header {
 	// unique msg id
 	__u64 msg_id;
 	//type
@@ -42,42 +42,42 @@ struct packet_header {
 };
 
 
-struct open_info {
+struct teadfs_open_info {
 	//unique open file, likely struct file;
 	__u64 file_id;
 	// file_path
-	struct protocol_binary file_path;
+	struct teadfs_protocol_binary file_path;
 };
 
-struct release_info {
+struct teadfs_release_info {
 	//unique open file, likely struct file;
 	__u64 file_id;
 	// file_path
-	struct protocol_binary file_path;
+	struct teadfs_protocol_binary file_path;
 };
 
 
-struct read_info {
+struct teadfs_read_info {
 	// file data
-	struct protocol_binary read_data;
+	struct teadfs_protocol_binary read_data;
 };
 
 
 
-struct write_info {
+struct teadfs_write_info {
 	// file data
-	struct protocol_binary write_data;
+	struct teadfs_protocol_binary write_data;
 };
 
-struct packet_info
+struct teadfs_packet_info
 {
-	struct packet_header header;
+	struct teadfs_packet_header header;
 	union data
 	{
-		struct open_info open;
-		struct release_info release;
-		struct read_info read;
-		struct write_info write;
+		struct teadfs_open_info open;
+		struct teadfs_release_info release;
+		struct teadfs_read_info read;
+		struct teadfs_write_info write;
 	};
 };
 
