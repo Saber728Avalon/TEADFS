@@ -168,10 +168,13 @@ namespace TEAD {
 					if (!nRepeatCount) {
 						m_bExit = true;
 					}
-					continue;
 				}
+				continue;
 			}
-			m_handler(ptrTask);
+			try {
+				m_handler(ptrTask);
+			} catch (std::exception& e) {
+			}
 			//reset repeat times
 			nRepeatCount = MAX_REPEAT_COUNT;
 			//

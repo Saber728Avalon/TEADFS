@@ -183,7 +183,7 @@ static int __init teadfs_module_init(void) {
             break;
         }
 		//create netlink
-		start_netlink();
+		teadfs_start_netlink();
 
 		//init param
 		teadfs_init_global_param();
@@ -196,7 +196,7 @@ static void __exit teadfs_module_exit(void) {
     LOG_DBG("ENTRY\n");
     unregister_filesystem(&teadfs_fs_type);
 
-	release_netlink();
+	teadfs_release_netlink();
     LOG_DBG("LEVAL\n");
 }
 

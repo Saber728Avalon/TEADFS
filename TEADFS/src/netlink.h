@@ -5,10 +5,12 @@
 
 
 // create netlink. R3 communite
-int start_netlink(void);
+int teadfs_start_netlink(void);
 
 // release netlink
-void release_netlink(void);
+void teadfs_release_netlink(void);
+
+int teadfs_send_to_user(char* data, int size);
 #endif
 
 

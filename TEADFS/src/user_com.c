@@ -4,6 +4,7 @@
 #include "protocol.h"
 #include "global_param.h"
 #include "teadfs_header.h"
+#include "netlink.h"
 
 #include <linux/fs.h>
 #include <linux/sched.h>
@@ -39,7 +40,7 @@ static void teadfs_request_wait_answer(struct teadfs_msg_ctx* ctx) {
 	return;
 }
 
-static int teadfs_request_send(size_t request_size, char* request_data, size_t* response_size, char** response_data) {
+static int teadfs_request_send(__u64 msg_id, size_t request_size, char* request_data, size_t* response_size, char** response_data) {
 	int rc = 0;
 
 	LOG_DBG("ENTRY\n");
@@ -52,6 +53,7 @@ static int teadfs_request_send(size_t request_size, char* request_data, size_t* 
 		}
 		// init struct teadfs_msg_ctx
 		ctx->state = TEADFS_MSG_CTX_STATE_PENDING;
+		ctx->msg_id = msg_id;
 		ctx->request_msg_size = request_size;
 		ctx->request_msg = request_data;
 		ctx->response_msg_size = 0;
@@ -60,10 +62,11 @@ static int teadfs_request_send(size_t request_size, char* request_data, size_t* 
 		init_waitqueue_head(&(ctx->wait));
 
 		//add list
-		mutex_unlock(&teadfs_get_msg_queue()->mux);
+		mutex_lock(&teadfs_get_msg_queue()->mux);
 		list_add_tail(&ctx->out_list, &teadfs_get_msg_queue()->msg_ctx_queue);
 		mutex_unlock(&teadfs_get_msg_queue()->mux);
 
+		teadfs_send_to_user(request_data, request_size);
 		//request usr answer
 		teadfs_request_wait_answer(ctx);
 
@@ -73,6 +76,18 @@ static int teadfs_request_send(size_t request_size, char* request_data, size_t* 
 	} while (0);
 	LOG_DBG("LEVAL rc:%d\n", rc);
 	return rc;
+}
+
+//add header info
+static void teadfs_packet_header(struct teadfs_packet_info* packet, int size, __u8  msg_type, __u8 initiator, pid_t pid, kuid_t uid, kgid_t gid) {
+	packet->header.size = size;
+	packet->header.msg_id = teadfs_get_next_msg_id();
+	packet->header.msg_type = msg_type;
+	packet->header.initiator = initiator;
+	packet->header.pid = pid;
+	packet->header.uid = uid;
+	packet->header.gid = gid;
+	return;
 }
 
 int teadfs_request_open(struct file* file) {
@@ -109,18 +124,16 @@ int teadfs_request_open(struct file* file) {
 			break;
 		}
 		packet = (struct teadfs_packet_info *)(buffer);
-		packet->header.msg_id = teadfs_get_next_msg_id();
-		packet->header.msg_type = PR_MSG_OPEN;
-		packet->header.pid = kpid;
-		packet->header.uid = KUIDT_INIT(0);
-		packet->header.gid = KGIDT_INIT(0);
+		//add header info
+		teadfs_packet_header(packet, buffer_size, PR_MSG_OPEN, 0, kpid, KUIDT_INIT(0), KGIDT_INIT(0));
 		
 		packet->data.open.file_id = (__u64)file;
 		packet->data.open.file_path.size = file_path_size;
 		packet->data.open.file_path.offset = sizeof(struct teadfs_packet_info);
 		memcpy(buffer + sizeof(struct teadfs_packet_info), file_path_start, file_path_size);
 
-		LOG_DBG("msg_id:0x%llx, msg_type:%d, pid:%d, uid:%d, gid:%d\n"
+		LOG_DBG("size:%d, msg_id:0x%llx, msg_type:%d, pid:%d, uid:%d, gid:%d\n"
+			, packet->header.size
 			, packet->header.msg_id
 			, packet->header.msg_type
 			, packet->header.pid
@@ -130,7 +143,7 @@ int teadfs_request_open(struct file* file) {
 		LOG_DBG("path:%s", buffer + sizeof(struct teadfs_packet_info));
 
 		//send to usr
-		rc = teadfs_request_send(buffer_size, buffer, &response_size, &response_data);
+		rc = teadfs_request_send(packet->header.msg_id, buffer_size, buffer, &response_size, &response_data);
 		if (rc) {
 			break;
 		}

@@ -4,6 +4,7 @@
 struct global_param {
 	struct mutex mux;
 	__u64 unique_id;
+	pid_t pid
 
 } global_param;
 
@@ -49,4 +50,19 @@ __u64 teadfs_get_next_msg_id(void) {
 
 struct comm_msg_queue* teadfs_get_msg_queue(void) {
 	return &g_comm_msg_queue;
+}
+
+//user process
+pid_t teadfs_get_client_pid(void) {
+	pid_t pid;
+	mutex_lock(&(global_param.mux));
+	pid = global_param.pid ;
+	mutex_unlock(&(global_param.mux));
+	return  pid;
+}
+
+void teadfs_set_client_pid(pid_t pid) {
+	mutex_lock(&(global_param.mux));
+	global_param.pid = pid;
+	mutex_unlock(&(global_param.mux));
 }

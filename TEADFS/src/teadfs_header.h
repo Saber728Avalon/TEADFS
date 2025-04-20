@@ -49,6 +49,7 @@ struct teadfs_msg_ctx {
 #define TEADFS_MSG_CTX_STATE_DONE     0x03
 #define TEADFS_MSG_CTX_STATE_NO_REPLY 0x04
 	u8 state;
+	__u64 msg_id;
 	size_t request_msg_size;
 	char* request_msg;
 	size_t response_msg_size;

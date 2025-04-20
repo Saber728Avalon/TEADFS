@@ -29,6 +29,7 @@
 #include "mem.h"
 #include "teadfs_log.h"
 #include "config.h"
+#include "user_com.h"
 
 #include <linux/fs.h>
 #include <linux/file.h>
@@ -224,54 +225,6 @@ static struct teadfs_kthread_ctl {
 	struct list_head req_list;
 	wait_queue_head_t wait;
 } teadfs_kthread_ctl;
-/**
- * teadfs_privileged_open
- * @lower_file: Result of dentry_open by root on lower dentry
- * @lower_dentry: Lower dentry for file to open
- * @lower_mnt: Lower vfsmount for file to open
- *
- * This function gets a r/w file opened againt the lower dentry.
- *
- * Returns zero on success; non-zero otherwise
- */
-int teadfs_privileged_open(struct file** lower_file,
-	struct path *lower_path,
-	const struct cred* cred)
-{
-	struct teadfs_open_req req;
-	int flags = O_LARGEFILE;
-	int rc = 0;
-	struct dentry* lower_dentry = lower_path->dentry;
-
-	LOG_DBG("ENTRY\n");
-	do {
-		init_completion(&req.done);
-		req.lower_file = lower_file;
-		req.path.dentry = lower_path->dentry;
-		req.path.mnt = lower_path->mnt;
-		/* Corresponding dput() and mntput() are done when the
-		 * lower file is fput() when all eCryptfs files for the inode are
-		 * released. */
-		flags |= IS_RDONLY(lower_dentry->d_inode) ? O_RDONLY : O_RDWR;
-		(*lower_file) = dentry_open(&req.path, flags, cred);
-		if (!IS_ERR(*lower_file))
-			break;
-		if ((flags & O_ACCMODE) == O_RDONLY) {
-			rc = PTR_ERR((*lower_file));
-			break;
-		}
-		mutex_lock(&teadfs_kthread_ctl.mux);
-		list_add_tail(&req.kthread_ctl_list, &teadfs_kthread_ctl.req_list);
-		mutex_unlock(&teadfs_kthread_ctl.mux);
-		wake_up(&teadfs_kthread_ctl.wait);
-		wait_for_completion(&req.done);
-		if (IS_ERR(*lower_file))
-			rc = PTR_ERR(*lower_file);
-	} while (0);
-	LOG_DBG("LEVAL rc:%d\n", rc);
-	return rc;
-}
-
 
 /**
  * teadfs_open
@@ -294,6 +247,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 
 	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
+		teadfs_request_open(file);
 		/* Released in ecryptfs_release or end of function if failure */
 		file_info = teadfs_zalloc(sizeof(struct teadfs_file_info), GFP_KERNEL);
 		teadfs_set_file_private(file, file_info);
