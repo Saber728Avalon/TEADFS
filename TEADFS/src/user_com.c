@@ -42,11 +42,12 @@ static void teadfs_request_wait_answer(struct teadfs_msg_ctx* ctx) {
 
 static int teadfs_request_send(__u64 msg_id, size_t request_size, char* request_data, size_t* response_size, char** response_data) {
 	int rc = 0;
+	struct teadfs_msg_ctx* ctx, *tmp_ctx;
 
 	LOG_DBG("ENTRY\n");
 	do {
 		// alloc memory
-		struct teadfs_msg_ctx* ctx = teadfs_zalloc(sizeof(struct teadfs_msg_ctx), GFP_KERNEL);
+		ctx = teadfs_zalloc(sizeof(struct teadfs_msg_ctx), GFP_KERNEL);
 		if (!ctx) {
 			rc = -ENOMEM;
 			break;
@@ -73,6 +74,13 @@ static int teadfs_request_send(__u64 msg_id, size_t request_size, char* request_
 		//result
 		*response_size = ctx->response_msg_size;
 		*response_data = ctx->response_msg;
+
+		// delete in list
+		mutex_lock(&teadfs_get_msg_queue()->mux);
+		list_del(&ctx->out_list);
+		mutex_unlock(&teadfs_get_msg_queue()->mux);
+		//free mem
+		teadfs_free(ctx);
 	} while (0);
 	LOG_DBG("LEVAL rc:%d\n", rc);
 	return rc;
@@ -146,6 +154,11 @@ int teadfs_request_open(struct file* file) {
 		rc = teadfs_request_send(packet->header.msg_id, buffer_size, buffer, &response_size, &response_data);
 		if (rc) {
 			break;
+		}
+
+		//release mem
+		if (response_data) {
+			teadfs_free(response_data);
 		}
 	} while (0);
 

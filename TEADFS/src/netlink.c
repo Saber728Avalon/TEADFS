@@ -75,15 +75,18 @@ static void teadfs_netlink_receive(struct sk_buff *skb) {
 			if (packet_info->header.msg_id == msg_ctx->msg_id) {
 				LOG_DBG("Find Msg\n");
 				mutex_lock(&msg_ctx->mux);
-				//msg is success
-				msg_ctx->state = TEADFS_MSG_CTX_STATE_DONE;
-				msg_ctx->response_msg = teadfs_zalloc(nlmsghdr->nlmsg_len, GFP_KERNEL);
-				if (!msg_ctx->response_msg) {
-					LOG_ERR("Alloc Mem Fail \n");
-					break;
-				}
-				msg_ctx->response_msg_size = nlmsghdr->nlmsg_len;
-				memcpy(msg_ctx->response_msg, packet_info, msg_ctx->response_msg_size);
+				do {
+					//msg is success
+					msg_ctx->state = TEADFS_MSG_CTX_STATE_DONE;
+					msg_ctx->response_msg = teadfs_zalloc(nlmsghdr->nlmsg_len, GFP_KERNEL);
+					if (!msg_ctx->response_msg) {
+						LOG_ERR("Alloc Mem Fail \n");
+						break;
+					}
+					msg_ctx->response_msg_size = nlmsghdr->nlmsg_len;
+					memcpy(msg_ctx->response_msg, packet_info, msg_ctx->response_msg_size);
+				} while (0);
+				LOG_DBG("Find Msg msg_ctx->state:%d\n", msg_ctx->state);
 				mutex_unlock(&msg_ctx->mux);
 				break;
 			}
