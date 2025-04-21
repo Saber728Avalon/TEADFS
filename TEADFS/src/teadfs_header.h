@@ -2,6 +2,7 @@
 #define TEADFS_HEADER_H
 
 #include "config.h"
+#include "protocol.h"
 
 #include <linux/fs.h>
 #include <linux/path.h>
@@ -31,6 +32,7 @@ struct teadfs_dentry_info {
 /* file private data. */
 struct teadfs_file_info {
 	struct file* lower_file;
+	enum OPEN_FILE_RESULT access;
 };
 
 

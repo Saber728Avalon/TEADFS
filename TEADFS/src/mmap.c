@@ -1,5 +1,7 @@
 #include "teadfs_log.h"
 #include "teadfs_header.h"
+#include "user_com.h"
+#include "mem.h"
 
 #include <linux/fs.h>
 #include <linux/mm.h>
@@ -24,6 +26,7 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 {
 	struct file* lower_file;
 	int rc = 0;
+	int encrypt_len = 0;
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -33,7 +36,18 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 			break;
 		}
 		LOG_ERR("file:%px, lower_file:%px\n", file, lower_file);
+		// read
 		rc = kernel_read(lower_file, offset, data, size);
+		if (rc < 0) {
+			LOG_ERR("kernel_read error:%d\n", file, lower_file);
+			break;
+		}
+		//send to user mode
+		encrypt_len = teadfs_request_read(data, rc, data, size);
+		if (encrypt_len < 0) {
+			break;
+		}
+		rc = encrypt_len;
 	} while (0);
 	LOG_DBG("LEVAL %d\n", rc);
 	return rc;
@@ -57,6 +71,8 @@ int teadfs_write_lower(struct file* file, char* data,
 {
 	struct file* lower_file;
 	ssize_t rc;
+	int encrypt_len = 0;
+	char* buf = NULL;
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -67,9 +83,30 @@ int teadfs_write_lower(struct file* file, char* data,
 			break;
 		}
 		LOG_ERR("file:%px, lower_file:%px\n", file, lower_file);
+
+		buf = teadfs_zalloc(size, GFP_KERNEL);
+		if (!buf) {
+			rc = -EIO;
+			break;
+		}
+		//send to user mode
+		encrypt_len = teadfs_request_write(data, size, buf, size);
+		if (encrypt_len > 0) {
+			data = buf;
+			size = encrypt_len;
+		}
+		//write data to file
 		rc = kernel_write(lower_file, data, size, offset);
+		if (rc < 0) {
+			LOG_ERR("kernel_read error:%d\n", file, lower_file);
+			break;
+		}
 		mark_inode_dirty_sync(file->f_inode);
 	} while (0);
+
+	if (buf) {
+		teadfs_free(buf);
+	}
 	LOG_DBG("LEVAL %d\n", rc);
 	return rc;
 }

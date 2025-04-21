@@ -44,7 +44,7 @@
 
 
 /**
- * teadfs_read_update_atime
+ * teadfs_aio_read_update_atime
  * 
  *
  * generic_file_read updates the atime of upper layer inode.  But, it
@@ -54,16 +54,20 @@
  * returns without any errors. This is to be used only for file reads.
  * The function to be used for directory reads is ecryptfs_read.
  */
-static ssize_t teadfs_read_update_atime(struct kiocb *iocb,
+static ssize_t teadfs_aio_read_update_atime(struct kiocb *iocb,
 				const struct iovec *iov,
 				unsigned long nr_segs, loff_t pos)
 {
 	ssize_t rc;
 	struct path lower;
 	struct file *file = iocb->ki_filp;
+	struct file* lower_file  = teadfs_file_to_lower(file);
 
 	LOG_DBG("ENTRY\n");
 	do {
+		// invalidate page
+		invalidate_remote_inode(lower_file->f_inode);
+		//read
 		rc = generic_file_aio_read(iocb, iov, nr_segs, pos);
 		/*
 		 * Even though this is a async interface, we need to wait
@@ -82,16 +86,20 @@ static ssize_t teadfs_read_update_atime(struct kiocb *iocb,
 	return rc;
 }
 
-static ssize_t teadfs_write(struct kiocb* iocb,
+static ssize_t teadfs_aio_write(struct kiocb* iocb,
 	const struct iovec* iov,
 	unsigned long nr_segs, loff_t pos)
 {
 	ssize_t rc;
 	struct path lower;
 	struct file* file = iocb->ki_filp;
+	struct file* lower_file = teadfs_file_to_lower(file);
 
 	LOG_DBG("ENTRY\n");
 	do {
+		// invalidate page
+		invalidate_remote_inode(lower_file->f_inode);
+		//write
 		rc = generic_file_aio_write(iocb, iov, nr_segs, pos);
 		/*
 		 * Even though this is a async interface, we need to wait
@@ -247,7 +255,13 @@ static int teadfs_open(struct inode *inode, struct file *file)
 
 	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
-		teadfs_request_open(file);
+		rc = teadfs_request_open(file);
+		if (rc < 0) {
+			LOG_ERR("Error Request User Mode Fail, rc=%d\n", rc);
+			rc = -ENOMEM;
+			break;
+		}
+		LOG_DBG("ACCESS MODE:%d\n", rc);
 		/* Released in ecryptfs_release or end of function if failure */
 		file_info = teadfs_zalloc(sizeof(struct teadfs_file_info), GFP_KERNEL);
 		teadfs_set_file_private(file, file_info);
@@ -261,14 +275,10 @@ static int teadfs_open(struct inode *inode, struct file *file)
 		//check file flag
 		flags |= file->f_flags;
 		//only write will not support in mmap to read file. so add read
-		LOG_ERR("flags:%x\n", flags);
-		LOG_ERR("flags1:%x O_WRONLY:%x\n", flags & O_ACCMODE, O_WRONLY);
 		if ((flags & O_ACCMODE) == O_WRONLY) {
 			flags ^= O_WRONLY;
-			LOG_ERR("flags:%x\n", flags);
 			flags |= O_RDWR;
 		}
-		LOG_ERR("flags:%x\n", flags);
 		file_info->lower_file = dentry_open(lower_path, flags, current_cred());
 		if (IS_ERR(file_info->lower_file)) {
 			rc = PTR_ERR(file_info->lower_file);
@@ -277,6 +287,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 				fput(file_info->lower_file); /* fput calls dput for lower_dentry */
 			}
 		}
+		file_info->access = rc;
 		LOG_ERR("lower_file:%px\n", file_info->lower_file);
 		rc = 0;
 	} while (0);
@@ -306,11 +317,16 @@ static int teadfs_flush(struct file *file, fl_owner_t td)
 
 static int teadfs_release(struct inode *inode, struct file *file)
 {
+	int rc = 0;
 	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
 	LOG_DBG("ENTRY file:%px lower_file:%px\n", file, file_info->lower_file);
 	if (file_info->lower_file) {
 		fput(file_info->lower_file);
 	}
+	//send to user mode
+	rc = teadfs_request_release(file);
+	LOG_DBG("xx rc:%d\n", rc);
+	//release memory
 	teadfs_set_file_private(file, NULL);
 	teadfs_free(file_info);
 	LOG_DBG("LEVAL\n");
@@ -400,9 +416,9 @@ const struct file_operations teadfs_dir_fops = {
 const struct file_operations teadfs_main_fops = {
 	.llseek = generic_file_llseek,
 	.read = do_sync_read,
-	.aio_read = teadfs_read_update_atime,
+	.aio_read = teadfs_aio_read_update_atime,
 	.write = do_sync_write,
-	.aio_write = teadfs_write,
+	.aio_write = teadfs_aio_write,
 	.readdir = teadfs_readdir,
 	.unlocked_ioctl = teadfs_unlocked_ioctl,
 #ifdef CONFIG_COMPAT

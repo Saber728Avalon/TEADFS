@@ -16,6 +16,7 @@ int read(uint32_t u32SrcSize, char* pSrcData, uint32_t* u32DstSize, char* pDstDa
 	for (int i = 0; i < u32SrcSize; i++) {
 		pDstData[i] = pSrcData[i] ^ 0x13;
 	}
+	*u32DstSize = u32SrcSize;
 	return 1;
 }
 
@@ -24,6 +25,7 @@ int write(uint32_t u32SrcSize, char* pSrcData, uint32_t* u32DstSize, char* pDstD
 	for (int i = 0; i < u32SrcSize; i++) {
 		pDstData[i] = pSrcData[i] ^ 0x13;
 	}
+	*u32DstSize = u32SrcSize;
 	return 1;
 }
 

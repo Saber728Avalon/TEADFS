@@ -49,6 +49,7 @@ static void deal_teadfs_msg(teadfs_packet_info* pPacketInfo) {
 		strFilePath.resize(pPacketInfo->data.open.file_path.size + 1);
 		strFilePath.at(pPacketInfo->data.open.file_path.size) = '\0';
 		strFilePath.resize(pPacketInfo->data.open.file_path.size);
+		strFilePath.assign((char*)pPacketInfo + pPacketInfo->data.open.file_path.offset, pPacketInfo->data.open.file_path.size);
 		if (g_deal_db.release) {
 			nCode = g_deal_db.release(pPacketInfo->data.release.file_id
 				, pPacketInfo->header.pid
@@ -65,7 +66,7 @@ static void deal_teadfs_msg(teadfs_packet_info* pPacketInfo) {
 		std::string binDstData;
 		uint32_t nDstSize = pPacketInfo->data.write.write_data.size + DATA_EXTENSION_SIZE;
 		binDstData.resize(nDstSize);
-		if (g_deal_db.write) g_deal_db.write(pPacketInfo->data.write.write_data.size,
+		if (g_deal_db.write) g_deal_db.read(pPacketInfo->data.write.write_data.size,
 			(char*)pPacketInfo + pPacketInfo->data.write.write_data.offset
 			, &nDstSize
 			, (char*)binDstData.data()
