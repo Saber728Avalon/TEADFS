@@ -255,11 +255,8 @@ static int teadfs_open(struct inode *inode, struct file *file)
 
 	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
-		rc = teadfs_request_open(file);
-		if (rc < 0) {
-			LOG_ERR("Error Request User Mode Fail, rc=%d\n", rc);
-			rc = -ENOMEM;
-			break;
+		if (S_ISREG(inode->i_mode)) {
+			teadfs_request_open(file);
 		}
 		LOG_DBG("ACCESS MODE:%d\n", rc);
 		/* Released in ecryptfs_release or end of function if failure */
@@ -323,8 +320,10 @@ static int teadfs_release(struct inode *inode, struct file *file)
 	if (file_info->lower_file) {
 		fput(file_info->lower_file);
 	}
-	//send to user mode
-	rc = teadfs_request_release(file);
+	if (S_ISREG(inode->i_mode)) {
+		//send to user mode
+		rc = teadfs_request_release(file);
+	}
 	LOG_DBG("xx rc:%d\n", rc);
 	//release memory
 	teadfs_set_file_private(file, NULL);

@@ -44,7 +44,7 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 		}
 		//send to user mode
 		encrypt_len = teadfs_request_read(data, rc, data, size);
-		if (encrypt_len < 0) {
+		if (encrypt_len <= 0) {
 			break;
 		}
 		rc = encrypt_len;
