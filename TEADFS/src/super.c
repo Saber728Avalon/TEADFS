@@ -40,6 +40,28 @@
 #include <linux/mm.h>
 
 
+
+// /*
+//  * These are initializations that only need to be done
+//  * once, because the fields are idempotent across use
+//  * of the inode, so let the slab aware of that.
+//  */
+//void teadfs_inode_init_once(struct inode* inode)
+//{
+//	memset(inode, 0, sizeof(*inode));
+//	INIT_HLIST_NODE(&inode->i_hash);
+//	INIT_LIST_HEAD(&inode->i_devices);
+//	INIT_LIST_HEAD(&inode->i_wb_list);
+//	INIT_LIST_HEAD(&inode->i_lru);
+//#if defined(CONFIG_INDOE_HAS_IO_LIST)
+//	INIT_LIST_HEAD(&inode->i_io_list);
+//#endif
+//	i_size_ordered_init(inode);
+//#ifdef CONFIG_FSNOTIFY
+//	INIT_HLIST_HEAD(&inode->i_fsnotify_marks);
+//#endif
+//}
+
 /**
  * teadfs_alloc_inode - allocate an ecryptfs inode
  * @sb: Pointer to the ecryptfs super block
@@ -62,9 +84,11 @@ static struct inode *teadfs_alloc_inode(struct super_block *sb)
 		inode_info = teadfs_zalloc(sizeof(struct teadfs_inode_info), GFP_KERNEL);
 		if (unlikely(!inode_info))
 			break;
+		//init
 		inode_init_once(&(inode_info->vfs_inode));
 		mutex_init(&inode_info->lower_file_mutex);
 		atomic_set(&inode_info->lower_file_count, 0);
+		address_space_init_once(&(inode_info->i_decrypt));
 		inode = &inode_info->vfs_inode;
 	} while (0);
 

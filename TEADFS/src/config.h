@@ -30,5 +30,9 @@
 #define CONFIG_VFS_RENAME_6_PARAM
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 3, 0)
+#define CONFIG_INDOE_HAS_IO_LIST
+#endif
+
 
 #endif // !CONFIG_H

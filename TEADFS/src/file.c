@@ -165,13 +165,11 @@ static ssize_t teadfs_aio_write(struct kiocb* iocb,
 	ssize_t rc;
 	struct path lower;
 	struct file* file = iocb->ki_filp;
-	struct file* lower_file = teadfs_file_to_lower(file);
+	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
 
 	LOG_DBG("ENTRY\n");
 	do {
-		// invalidate page
-		invalidate_remote_inode(lower_file->f_inode);
-		invalidate_remote_inode(file->f_inode);
+
 		//write
 		rc = generic_file_aio_write(iocb, iov, nr_segs, pos);
 		/*
@@ -180,6 +178,12 @@ static ssize_t teadfs_aio_write(struct kiocb* iocb,
 		 */
 		if (-EIOCBQUEUED == rc)
 			rc = wait_on_sync_kiocb(iocb);
+
+		// double buffer, encrypte data forbide edit.  decrypt data edit, must invalidate encrypt/decrypt data page
+		if (OFR_DECRYPT == file_info->access) {
+			invalidate_remote_inode(file_info->lower_file->f_inode);
+			invalidate_remote_inode(file->f_inode);
+		}
 	} while (0);
 
 	LOG_DBG("LEVAL rc:%d\n", rc);
@@ -326,6 +330,8 @@ static int teadfs_open(struct inode *inode, struct file *file)
 	struct path *lower_path = teadfs_dentry_to_lower_path(teadfs_dentry);
 	int flags = O_LARGEFILE;
 	int access = OFR_INIT;
+	struct teadfs_inode_info* inode_info = teadfs_inode_to_private(inode);
+
 
 	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
@@ -364,6 +370,9 @@ static int teadfs_open(struct inode *inode, struct file *file)
 			break;
 		}
 		file_info->access = access;
+		if (OFR_DECRYPT == file_info->access) {
+			file->f_mapping = &(inode_info->i_decrypt);
+		}
 		LOG_ERR("lower_file:%px  access:%d\n", file_info->lower_file, access);
 		rc = 0;
 	} while (0);

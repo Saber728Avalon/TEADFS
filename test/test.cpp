@@ -14,8 +14,29 @@
 
 #define ENCRYPT_FILE_HEADER_SIZE 256
 
+
+
+
+
+
+
+std::string GetProcPath(uint32_t u32PID) {
+	char path[PATH_MAX];
+	ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+	if (len != -1) {
+		path[len] = '\0';
+	}
+	std::string strPath = path;
+	return strPath;
+}
+
+
+
 int open(uint64_t u64FileId, uint32_t u32PID, char* pszFilePath) {
+	
 	printf("[open] file id:%0xllx, pid:%d path:%s\n", u64FileId, u32PID, pszFilePath);
+	std::string strProcPath = GetProcPath(u32PID);
+
 	char chHeader[ENCRYPT_FILE_HEADER_SIZE] = { 0 };
 	TEADFS_OPEN_RESULT result;
 	int fdSrc = -1;

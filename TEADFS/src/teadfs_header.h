@@ -41,6 +41,8 @@ struct teadfs_inode_info {
 	struct inode vfs_inode;
 	struct inode* lower_inode;
 	struct mutex lower_file_mutex;
+	//double buffer, decrypt data
+	struct address_space i_decrypt;
 	atomic_t lower_file_count;
 };
 
