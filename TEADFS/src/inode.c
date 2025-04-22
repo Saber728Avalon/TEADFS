@@ -2,6 +2,9 @@
 #include "teadfs_header.h"
 #include "lookup.h"
 #include "config.h"
+#include "protocol.h"
+#include "file.h"
+#include "user_com.h"
 
 #include <linux/fs.h>
 #include <linux/fs_stack.h>
@@ -92,6 +95,7 @@ static int teadfs_getattr(struct vfsmount* mnt, struct dentry* dentry,
 {
 	struct kstat lower_stat;
 	int rc;
+	int access = OFR_INIT;
 
 	LOG_DBG("ENTRY\n");
 	rc = vfs_getattr(teadfs_dentry_to_lower_path(dentry), &lower_stat);
@@ -100,6 +104,13 @@ static int teadfs_getattr(struct vfsmount* mnt, struct dentry* dentry,
 			teadfs_inode_to_lower(dentry->d_inode));
 		generic_fillattr(dentry->d_inode, stat);
 		stat->blocks = lower_stat.blocks;
+
+		LOG_DBG("++++++++++++++++++++++++++++++++++++++++++++++++dentry:%px\n", dentry);
+		access = teadfs_request_open_path(teadfs_dentry_to_lower_path(dentry));
+		if (OFR_DECRYPT == access) {
+			(*stat).size -= ENCRYPT_FILE_HEADER_SIZE;
+			LOG_DBG("++++++++++++++++++++++++++++++++++++++++++++++++size:%lld\n", (*stat).size);
+		}
 	}
 	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return rc;

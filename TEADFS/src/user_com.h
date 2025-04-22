@@ -4,7 +4,8 @@
 #include <linux/fs.h>
 
 //open file to user mode
-int teadfs_request_open(struct file* file);
+int teadfs_request_open_file(struct file* file);
+int teadfs_request_open_path(struct path* path);
 
 //close file to user mode
 int teadfs_request_release(struct file* file);

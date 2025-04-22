@@ -98,14 +98,13 @@ static void teadfs_packet_header(struct teadfs_packet_info* packet, int size, __
 	return;
 }
 
-int teadfs_request_open(struct file* file) {
-	char* buffer_file_path = NULL;
+
+
+
+static int teadfs_request_open(char* file_path_start, int file_path_size, struct file* file) {
 	char* buffer_packet = NULL;
 	int buffer_size = 0;
-	char* file_path_start = NULL;
-	struct dentry* teadfs_dentry = file->f_path.dentry;
 	int rc = 0;
-	int file_path_size = 0;
 	pid_t kpid = 0;
 	struct teadfs_packet_info* packet = NULL;
 	char* response_data = NULL;
@@ -120,16 +119,6 @@ int teadfs_request_open(struct file* file) {
 			rc = -ENOMEM;
 			break;
 		}
-		LOG_DBG("++++++++++++++++cur:%d   client%d++++++++++\n", kpid, teadfs_get_client_pid());
-		// get file path
-		buffer_file_path = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
-		if (!buffer_file_path) {
-			rc = -ENOMEM;
-			break;
-		}
-		file_path_start = d_path(&file->f_path, buffer_file_path, PATH_MAX);
-		file_path_size = strlen(file_path_start);
-
 		//packet data ro usr
 		buffer_size = sizeof(struct teadfs_packet_info) + file_path_size;
 		buffer_packet = teadfs_zalloc(sizeof(struct teadfs_packet_info) + file_path_size, GFP_KERNEL);
@@ -179,10 +168,59 @@ int teadfs_request_open(struct file* file) {
 	if (buffer_packet) {
 		teadfs_free(buffer_packet);
 	}
+
+	LOG_DBG("LEVAL rc:%d\n", rc);
+	return rc;
+}
+
+int teadfs_request_open_file(struct file* file) {
+	int rc = 0;
+	char* buffer_file_path = NULL;
+	int file_path_size = 0;
+	char* file_path_start = NULL;
+
+	// get file path
+	do {
+		buffer_file_path = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
+		if (!buffer_file_path) {
+			rc = -ENOMEM;
+			break;
+		}
+		file_path_start = d_path(&file->f_path, buffer_file_path, PATH_MAX);
+		file_path_size = strlen(file_path_start);
+
+		rc = teadfs_request_open(file_path_start, file_path_size, file);
+	} while (0);
+
 	if (buffer_file_path) {
 		teadfs_free(buffer_file_path);
 	}
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	return rc;
+}
+
+
+int teadfs_request_open_path(struct path* path) {
+	int rc = 0;
+	char* buffer_file_path = NULL;
+	int file_path_size = 0;
+	char* file_path_start = NULL;
+
+	// get file path
+	do {
+		buffer_file_path = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
+		if (!buffer_file_path) {
+			rc = -ENOMEM;
+			break;
+		}
+		file_path_start = d_path(path, buffer_file_path, PATH_MAX);
+		file_path_size = strlen(file_path_start);
+
+		rc = teadfs_request_open(file_path_start, file_path_size, NULL);
+	} while (0);
+
+	if (buffer_file_path) {
+		teadfs_free(buffer_file_path);
+	}
 	return rc;
 }
 

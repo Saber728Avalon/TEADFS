@@ -44,7 +44,19 @@
 #include <linux/aio.h>
 
 
-static struct file* teadfs_get_lower_file(struct dentry* dentry, struct inode* inode, int flags)
+void teadfs_replace_copy_address_space(struct inode* inode, struct address_space* dst_address_space, struct address_space* src_address_space) {
+	dst_address_space->a_ops =				src_address_space->a_ops;
+	dst_address_space->host =				src_address_space->host;
+	dst_address_space->flags =				src_address_space->flags;
+	mapping_set_gfp_mask(dst_address_space, GFP_HIGHUSER_MOVABLE);
+	dst_address_space->private_data =		NULL;
+	dst_address_space->backing_dev_info =	src_address_space->backing_dev_info;
+	dst_address_space->writeback_index =	src_address_space->writeback_index;
+	dst_address_space->backing_dev_info =	src_address_space->backing_dev_info;
+}
+
+
+struct file* teadfs_get_lower_file(struct dentry* dentry, struct inode* inode, int flags)
 {
 	struct teadfs_inode_info* inode_info;
 	int count;
@@ -59,8 +71,9 @@ static struct file* teadfs_get_lower_file(struct dentry* dentry, struct inode* i
 		kpid = 0;
 	}
 	//
-	inode_info = teadfs_inode_to_private(inode);
-	if (kpid) {
+	if (kpid && inode) {
+		inode_info = teadfs_inode_to_private(inode);
+
 		mutex_lock(&inode_info->lower_file_mutex);
 		//
 		count = atomic_inc_return(&inode_info->lower_file_count);
@@ -79,7 +92,7 @@ static struct file* teadfs_get_lower_file(struct dentry* dentry, struct inode* i
 	return file;
 }
 
-static void teadfs_put_lower_file(struct inode* inode, struct file* file)
+void teadfs_put_lower_file(struct inode* inode, struct file* file)
 {
 	struct teadfs_inode_info* inode_info;
 	pid_t kpid = 0;
@@ -137,8 +150,8 @@ static ssize_t teadfs_aio_read_update_atime(struct kiocb *iocb,
 	LOG_DBG("ENTRY\n");
 	do {
 		// invalidate page
-		invalidate_remote_inode(lower_file->f_inode);
-		invalidate_remote_inode(file->f_inode);
+		//invalidate_remote_inode(lower_file->f_inode);
+		//invalidate_remote_inode(file->f_inode);
 		//read
 		rc = generic_file_aio_read(iocb, iov, nr_segs, pos);
 		/*
@@ -336,7 +349,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
 		if (S_ISREG(inode->i_mode)) {
-			access = teadfs_request_open(file);
+			access = teadfs_request_open_file(file);
 			if (OFR_PROHIBIT == access) {
 				rc = -EACCES;
 				break;
@@ -371,6 +384,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 		}
 		file_info->access = access;
 		if (OFR_DECRYPT == file_info->access) {
+			teadfs_replace_copy_address_space(inode, &(inode_info->i_decrypt), file->f_mapping);
 			file->f_mapping = &(inode_info->i_decrypt);
 		}
 		LOG_ERR("lower_file:%px  access:%d\n", file_info->lower_file, access);

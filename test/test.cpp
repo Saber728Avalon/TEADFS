@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <memory.h>
+#include <linux/limits.h>
 
 
 #define ENCRYPT_FILE_FLAG 0x44414554
@@ -21,8 +22,10 @@
 
 
 std::string GetProcPath(uint32_t u32PID) {
+	char link_buf[64];
 	char path[PATH_MAX];
-	ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+	sprintf(link_buf, "/proc/%d/exe", u32PID);
+	ssize_t len = readlink(link_buf, path, sizeof(path) - 1);
 	if (len != -1) {
 		path[len] = '\0';
 	}
@@ -37,21 +40,27 @@ int open(uint64_t u64FileId, uint32_t u32PID, char* pszFilePath) {
 	printf("[open] file id:%0xllx, pid:%d path:%s\n", u64FileId, u32PID, pszFilePath);
 	std::string strProcPath = GetProcPath(u32PID);
 
+
+
 	char chHeader[ENCRYPT_FILE_HEADER_SIZE] = { 0 };
-	TEADFS_OPEN_RESULT result;
+	TEADFS_OPEN_RESULT result = TOR_INIT;
 	int fdSrc = -1;
 	do {
 		fdSrc = open(pszFilePath, O_RDONLY);
 		if (fdSrc < 0) {
-			result = TOR_INIT;
+			break;
 		}
 		int nRead = read(fdSrc, chHeader, ENCRYPT_FILE_HEADER_SIZE);
 		
 		if (nRead < ENCRYPT_FILE_HEADER_SIZE) {
-			result = TOR_INIT;
+			break;
 		}
 		if (ENCRYPT_FILE_FLAG == *(uint32_t*)chHeader) {
-			result = TOR_DECRYPT;
+			if (std::string::npos != strProcPath.find("cat")) {
+				result = TOR_ENCRYPT;
+			} else {
+				result = TOR_DECRYPT;
+			}
 		}
 	} while (0);
 	if (fdSrc > 0) {
