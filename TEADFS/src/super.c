@@ -72,17 +72,6 @@ static struct inode *teadfs_alloc_inode(struct super_block *sb)
 	return inode;
 }
 
-static void teadfs_i_callback(struct rcu_head *head)
-{
-	struct inode *inode = container_of(head, struct inode, i_rcu);
-	struct teadfs_inode_info *inode_info;
-	inode_info = teadfs_inode_to_private(inode);
-
-	LOG_DBG("ENTRY\n");
-	teadfs_free(inode_info);
-	LOG_DBG("LEVAL\n");
-}
-
 /**
  * teadfs_destroy_inode
  * @inode: The ecryptfs inode
@@ -98,7 +87,8 @@ static void teadfs_destroy_inode(struct inode *inode)
 	LOG_DBG("ENTRY\n");
 	inode_info = teadfs_inode_to_private(inode);
 	//BUG_ON(!inode_info->lower_inode);
-	call_rcu(&inode->i_rcu, teadfs_i_callback);
+	teadfs_free(inode_info);
+	teadfs_set_inode_lower(inode, NULL);
 	LOG_DBG("LEVAL\n");
 }
 

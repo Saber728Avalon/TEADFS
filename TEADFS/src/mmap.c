@@ -2,11 +2,15 @@
 #include "teadfs_header.h"
 #include "user_com.h"
 #include "mem.h"
+#include "protocol.h"
 
 #include <linux/fs.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/fs_stack.h>
+
+
+#define ENCRYPT_FILE_HEADER_SIZE 256
 
 /**
  * teadfs_read_lower
@@ -24,30 +28,36 @@
 int teadfs_read_lower(char* data, loff_t offset, size_t size,
 	struct file* file)
 {
-	struct file* lower_file;
+	struct teadfs_file_info* file_info;
 	int rc = 0;
 	int encrypt_len = 0;
 
 	LOG_DBG("ENTRY\n");
 	do {
-		lower_file = teadfs_file_to_lower(file);
-		if (!lower_file) {
+		file_info = teadfs_file_to_private(file);
+		if (!file_info->lower_file) {
 			rc = -EIO;
 			break;
 		}
-		LOG_ERR("file:%px, lower_file:%px\n", file, lower_file);
+		LOG_ERR("file:%px, lower_file:%px\n", file, file_info->lower_file);
+		if (OFR_DECRYPT == file_info->access) {
+			offset += ENCRYPT_FILE_HEADER_SIZE;
+		}
 		// read
-		rc = kernel_read(lower_file, offset, data, size);
+		rc = kernel_read(file_info->lower_file, offset, data, size);
 		if (rc < 0) {
-			LOG_ERR("kernel_read error:%d\n", file, lower_file);
+			LOG_ERR("kernel_read error:%d\n", file, file_info->lower_file);
 			break;
 		}
-		//send to user mode
-		encrypt_len = teadfs_request_read(data, rc, data, size);
-		if (encrypt_len <= 0) {
-			break;
+		//encrypt file, will send to user mode
+		if (OFR_DECRYPT == file_info->access) {
+			encrypt_len = teadfs_request_read(offset, data, rc, data, size);
+			if (encrypt_len <= 0) {
+				break;
+			}
+			rc = encrypt_len;
 		}
-		rc = encrypt_len;
+
 	} while (0);
 	LOG_DBG("LEVAL %d\n", rc);
 	return rc;
@@ -69,7 +79,7 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 int teadfs_write_lower(struct file* file, char* data,
 	loff_t offset, size_t size)
 {
-	struct file* lower_file;
+	struct teadfs_file_info* file_info;
 	ssize_t rc;
 	int encrypt_len = 0;
 	char* buf = NULL;
@@ -77,28 +87,37 @@ int teadfs_write_lower(struct file* file, char* data,
 	LOG_DBG("ENTRY\n");
 	do {
 
-		lower_file = teadfs_file_to_lower(file);
-		if (!lower_file) {
+		file_info = teadfs_file_to_private(file);
+		if (!file_info->lower_file) {
 			rc = -EIO;
 			break;
 		}
-		LOG_ERR("file:%px, lower_file:%px\n", file, lower_file);
-
+		LOG_ERR("file:%px, lower_file:%px\n", file, file_info->lower_file);
 		buf = teadfs_zalloc(size, GFP_KERNEL);
 		if (!buf) {
 			rc = -EIO;
 			break;
 		}
+		// cann't edit file, in encrypt open.
+		if (OFR_ENCRYPT == file_info->access) {
+			rc = -EIO;
+			break;
+		}
 		//send to user mode
-		encrypt_len = teadfs_request_write(data, size, buf, size);
-		if (encrypt_len > 0) {
+		if (OFR_DECRYPT == file_info->access) {
+			encrypt_len = teadfs_request_write(offset, data, size, buf, size);
+			if (encrypt_len < 0) {
+				rc = -EIO;
+				break;
+			}
 			data = buf;
 			size = encrypt_len;
+			offset += ENCRYPT_FILE_HEADER_SIZE;
 		}
 		//write data to file
-		rc = kernel_write(lower_file, data, size, offset);
+		rc = kernel_write(file_info->lower_file, data, size, offset);
 		if (rc < 0) {
-			LOG_ERR("kernel_read error:%d\n", file, lower_file);
+			LOG_ERR("kernel_read error:%d\n", file, file_info->lower_file);
 			break;
 		}
 		mark_inode_dirty_sync(file->f_inode);

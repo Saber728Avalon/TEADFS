@@ -27,8 +27,11 @@
 
 
 
+#define ENCRYPT_FILE_HEADER_SIZE 256
+
 enum OPEN_FILE_RESULT {
-	OFR_INIT,
+	OFR_INIT = 1,
+	OFR_PROHIBIT,  // prohibit access file
 	OFR_ENCRYPT,// file be encrypt, and access by decrypt
 	OFR_DECRYPT, // file be encrypt, but access by decrypt
 
@@ -36,7 +39,7 @@ enum OPEN_FILE_RESULT {
 };
 
 enum RELEASE_FILE_RESULT {
-	RFR_NORMAL, // Do not take any action
+	RFR_NORMAL = 1, // Do not take any action
 	RFR_ENCRYPT, // encrypt file.
 
 	RFR_COUNT
@@ -85,6 +88,8 @@ struct teadfs_release_info {
 
 struct teadfs_read_info {
 	int code; //result code
+	//read file data offset
+	__u64 offset;
 	// file data
 	struct teadfs_protocol_binary read_data;
 };
@@ -93,6 +98,8 @@ struct teadfs_read_info {
 
 struct teadfs_write_info {
 	int code; //result code
+	//write file data offset
+	__u64 offset;
 	// file data
 	struct teadfs_protocol_binary write_data;
 };

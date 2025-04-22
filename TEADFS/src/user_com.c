@@ -163,7 +163,7 @@ int teadfs_request_open(struct file* file) {
 			break;
 		}
 		if ((NULL == response_data) || (response_size < sizeof(struct teadfs_packet_info))) {
-			LOG_ERR("Get Message Size Error, size:%d", response_size);
+			LOG_ERR("Get Message Size Error, size:%d\n", response_size);
 			rc = -ENOMEM;
 			break;
 		}
@@ -252,7 +252,7 @@ int teadfs_request_release(struct file* file) {
 			break;
 		}
 		if ((NULL == response_data) || (response_size < sizeof(struct teadfs_packet_info))) {
-			LOG_ERR("Get Message Size Error, size:%d", response_size);
+			LOG_ERR("Get Message Size Error, size:%d\n", response_size);
 			rc = -ENOMEM;
 			break;
 		}
@@ -276,7 +276,7 @@ int teadfs_request_release(struct file* file) {
 
 
 //close file to user mode
-int teadfs_request_read(const char* src_data, int src_size, char* dst_data, int dst_size) {
+int teadfs_request_read(loff_t offset, const char* src_data, int src_size, char* dst_data, int dst_size) {
 	int rc = 0;
 	int buffer_size = 0;
 	char *buffer = NULL;
@@ -305,6 +305,7 @@ int teadfs_request_read(const char* src_data, int src_size, char* dst_data, int 
 		//add header info
 		teadfs_packet_header(packet, buffer_size, PR_MSG_READ, 0, kpid, KUIDT_INIT(0), KGIDT_INIT(0));
 
+		packet->data.read.offset = offset;
 		packet->data.read.code = 0;
 		packet->data.read.read_data.size = src_size;
 		packet->data.read.read_data.offset = sizeof(struct teadfs_packet_info);
@@ -318,8 +319,6 @@ int teadfs_request_read(const char* src_data, int src_size, char* dst_data, int 
 			, packet->header.uid
 			, packet->header.gid
 		);
-		LOG_DBG("path:%s", buffer + sizeof(struct teadfs_packet_info));
-
 		//send to usr
 		rc = teadfs_request_send(packet->header.msg_id, buffer_size, buffer, &response_size, &response_data);
 		if (rc) {
@@ -328,7 +327,7 @@ int teadfs_request_read(const char* src_data, int src_size, char* dst_data, int 
 			break;
 		}
 		if ((NULL == response_data) || (response_size < sizeof(struct teadfs_packet_info))) {
-			LOG_ERR("Get Message Size Error, size:%d", response_size);
+			LOG_ERR("Get Message Size Error, size:%d\n", response_size);
 			rc = -ENOMEM;
 			break;
 		}
@@ -364,7 +363,7 @@ int teadfs_request_read(const char* src_data, int src_size, char* dst_data, int 
 
 
 //close file to user mode
-int teadfs_request_write(const char* src_data, int src_size, char* dst_data, int dst_size) {
+int teadfs_request_write(loff_t offset, const char* src_data, int src_size, char* dst_data, int dst_size) {
 	int rc = 0;
 	int buffer_size = 0;
 	char* buffer = NULL;
@@ -393,6 +392,7 @@ int teadfs_request_write(const char* src_data, int src_size, char* dst_data, int
 		//add header info
 		teadfs_packet_header(packet, buffer_size, PR_MSG_WRITE, 0, kpid, KUIDT_INIT(0), KGIDT_INIT(0));
 
+		packet->data.write.offset = offset;
 		packet->data.write.code = 0;
 		packet->data.write.write_data.size = src_size;
 		packet->data.write.write_data.offset = sizeof(struct teadfs_packet_info);
@@ -406,8 +406,6 @@ int teadfs_request_write(const char* src_data, int src_size, char* dst_data, int
 			, packet->header.uid
 			, packet->header.gid
 		);
-		LOG_DBG("path:%s", buffer + sizeof(struct teadfs_packet_info));
-
 		//send to usr
 		rc = teadfs_request_send(packet->header.msg_id, buffer_size, buffer, &response_size, &response_data);
 		if (rc) {
@@ -415,7 +413,7 @@ int teadfs_request_write(const char* src_data, int src_size, char* dst_data, int
 			break;
 		}
 		if ((NULL == response_data) || (response_size < sizeof(struct teadfs_packet_info))) {
-			LOG_ERR("Get Message Size Error, size:%d", response_size);
+			LOG_ERR("Get Message Size Error, size:%d\n", response_size);
 			rc = -ENOMEM;
 			break;
 		}

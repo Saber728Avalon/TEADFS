@@ -66,8 +66,9 @@ static void deal_teadfs_msg(teadfs_packet_info* pPacketInfo) {
 		std::string binDstData;
 		uint32_t nDstSize = pPacketInfo->data.write.write_data.size + DATA_EXTENSION_SIZE;
 		binDstData.resize(nDstSize);
-		if (g_deal_db.write) g_deal_db.read(pPacketInfo->data.write.write_data.size,
-			(char*)pPacketInfo + pPacketInfo->data.write.write_data.offset
+		if (g_deal_db.read) g_deal_db.read(pPacketInfo->data.read.offset
+			, pPacketInfo->data.read.read_data.size
+			, (char*)pPacketInfo + pPacketInfo->data.read.read_data.offset
 			, &nDstSize
 			, (char*)binDstData.data()
 		);
@@ -77,14 +78,15 @@ static void deal_teadfs_msg(teadfs_packet_info* pPacketInfo) {
 		pResponsePacketInfo->data.read.code = 0;
 		pResponsePacketInfo->data.read.read_data.size = nDstSize;
 		pResponsePacketInfo->data.read.read_data.offset = sizeof(teadfs_packet_info);
-		memcmp(binResponseData.data() + sizeof(teadfs_packet_info), binDstData.data(), nDstSize);
+		memcpy((char *)binResponseData.data() + sizeof(teadfs_packet_info), binDstData.data(), nDstSize);
 	}
 		break;
 	case PR_MSG_WRITE: {
 		std::string binDstData;
 		uint32_t nDstSize = pPacketInfo->data.write.write_data.size + DATA_EXTENSION_SIZE;
 		binDstData.resize(nDstSize);
-		if (g_deal_db.write) g_deal_db.write(pPacketInfo->data.write.write_data.size,
+		if (g_deal_db.write) g_deal_db.write(pPacketInfo->data.write.offset
+			, pPacketInfo->data.write.write_data.size,
 			(char*)pPacketInfo + pPacketInfo->data.write.write_data.offset
 			, &nDstSize
 			, (char*)binDstData.data()
@@ -95,7 +97,7 @@ static void deal_teadfs_msg(teadfs_packet_info* pPacketInfo) {
 		pResponsePacketInfo->data.write.code = 0;
 		pResponsePacketInfo->data.write.write_data.size = nDstSize;
 		pResponsePacketInfo->data.write.write_data.offset = sizeof(teadfs_packet_info);
-		memcmp(binResponseData.data() + sizeof(teadfs_packet_info), binDstData.data(), nDstSize);
+		memcpy((char *)binResponseData.data() + sizeof(teadfs_packet_info), binDstData.data(), nDstSize);
 	}
 		break;
 	case PR_MSG_CLEANUP:

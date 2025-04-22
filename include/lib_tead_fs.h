@@ -5,7 +5,8 @@
 
 
 	enum TEADFS_OPEN_RESULT {
-		TOR_INIT,
+		TOR_INIT =1 ,
+		TOR_PROHIBIT,// prohibit access file
 		TOR_ENCRYPT,// file be encrypt, and access by decrypt
 		TOR_DECRYPT,// file be encrypt, and access by decrypt
 
@@ -13,7 +14,7 @@
 		};
 
 	enum TEADFS_RELEASE_FILE_RESULT {
-		TRFR_NORMAL, // Do not take any action
+		TRFR_NORMAL = 1, // Do not take any action
 		TRFR_ENCRYPT, // encrypt file.
 
 		TRFR_COUNT
@@ -22,8 +23,8 @@
 	struct TEAFS_DEAL_CB {
 		int (*open)(uint64_t u64FileId, uint32_t u32PID, char* pszFilePath);
 		int (*release)(uint64_t u64FileId, uint32_t u32PID, char* pszFilePath);
-		int (*read)(uint32_t u32SrcSize, char *pSrcData, uint32_t *u32DstSize, char* pDstData);
-		int (*write)(uint32_t u32SrcSize, char* pSrcData, uint32_t* u32DstSize, char* pDstData);
+		int (*read)(uint64_t offset, uint32_t u32SrcSize, char *pSrcData, uint32_t *u32DstSize, char* pDstData);
+		int (*write)(uint64_t offset, uint32_t u32SrcSize, char* pSrcData, uint32_t* u32DstSize, char* pDstData);
 		int (*cleanup)(uint64_t u64FileId);
 	};
 	//start and connect fs

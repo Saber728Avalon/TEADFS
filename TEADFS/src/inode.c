@@ -532,6 +532,7 @@ teadfs_rename(struct inode* old_dir, struct dentry* old_dentry,
 	struct dentry* lower_new_dir_dentry;
 	struct dentry* trap = NULL;
 	struct inode* target_inode;
+	int is_rename_lock = 0;
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -541,7 +542,7 @@ teadfs_rename(struct inode* old_dir, struct dentry* old_dentry,
 		dget(lower_new_dentry);
 		lower_old_dir_dentry = dget_parent(lower_old_dentry);
 		lower_new_dir_dentry = dget_parent(lower_new_dentry);
-		target_inode = new_dentry->d_inode;
+		target_inode = d_inode(new_dentry);
 		trap = lock_rename(lower_old_dir_dentry, lower_new_dir_dentry);
 		/* source should not be ancestor of target */
 		if (trap == lower_old_dentry) {
@@ -553,6 +554,7 @@ teadfs_rename(struct inode* old_dir, struct dentry* old_dentry,
 			rc = -ENOTEMPTY;
 			break;
 		}
+		is_rename_lock = 1;
 		rc = vfs_rename(lower_old_dir_dentry->d_inode, lower_old_dentry,
 			lower_new_dir_dentry->d_inode, lower_new_dentry
 #if defined(CONFIG_VFS_RENAME_6_PARAM)
@@ -571,7 +573,9 @@ teadfs_rename(struct inode* old_dir, struct dentry* old_dentry,
 
 	} while (0);
 
-	unlock_rename(lower_old_dir_dentry, lower_new_dir_dentry);
+	if (is_rename_lock) {
+		unlock_rename(lower_old_dir_dentry, lower_new_dir_dentry);
+	}
 	dput(lower_new_dir_dentry);
 	dput(lower_old_dir_dentry);
 	dput(lower_new_dentry);
