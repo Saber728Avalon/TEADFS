@@ -4,8 +4,8 @@
 struct global_param {
 	struct mutex mux;
 	__u64 unique_id;
-	pid_t pid
-
+	pid_t pid;
+	int connect;
 } global_param;
 
 
@@ -64,5 +64,20 @@ pid_t teadfs_get_client_pid(void) {
 void teadfs_set_client_pid(pid_t pid) {
 	mutex_lock(&(global_param.mux));
 	global_param.pid = pid;
+	mutex_unlock(&(global_param.mux));
+}
+
+
+
+int  teadfs_get_client_connect(void) {
+	int connect;
+	mutex_lock(&(global_param.mux));
+	connect = global_param.connect;
+	mutex_unlock(&(global_param.mux));
+	return  connect;
+}
+void teadfs_set_clinet_connect(int connect) {
+	mutex_lock(&(global_param.mux));
+	global_param.connect = connect;
 	mutex_unlock(&(global_param.mux));
 }

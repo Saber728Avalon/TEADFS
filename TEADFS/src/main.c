@@ -6,6 +6,7 @@
 #include "super.h"
 #include "netlink.h"
 #include "global_param.h"
+#include "miscdev.h"
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -187,6 +188,9 @@ static int __init teadfs_module_init(void) {
 
 		//init param
 		teadfs_init_global_param();
+
+		// check client is connect ?
+		teadfs_init_miscdev();
     } while (0);
     LOG_DBG("LEVAL\n");
     return 0;
@@ -197,6 +201,8 @@ static void __exit teadfs_module_exit(void) {
     unregister_filesystem(&teadfs_fs_type);
 
 	teadfs_release_netlink();
+
+	teadfs_destroy_miscdev();
     LOG_DBG("LEVAL\n");
 }
 

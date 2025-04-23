@@ -112,6 +112,10 @@ static int teadfs_request_open(char* file_path_start, int file_path_size, struct
 
 	LOG_DBG("ENTRY\n");
 	do {
+		if (!teadfs_get_client_connect()) {
+			rc = -ENOMEM;
+			break;
+		}
 		//get current process id
 		kpid = task_tgid_vnr(current);
 		//ignore client proces
@@ -228,6 +232,10 @@ int teadfs_request_release(char* file_path_start, int file_path_size, struct fil
 
 	LOG_DBG("ENTRY\n");
 	do {
+		if (!teadfs_get_client_connect()) {
+			rc = -ENOMEM;
+			break;
+		}
 		if (!(file) || !(file->f_path.dentry) || !(file->f_path.mnt)) {
 			LOG_ERR("error file\n");
 			rc = -ENOMEM;
@@ -305,6 +313,10 @@ int teadfs_request_read(loff_t offset, const char* src_data, int src_size, char*
 
 	LOG_DBG("ENTRY\n");
 	do {
+		if (!teadfs_get_client_connect()) {
+			rc = -ENOMEM;
+			break;
+		}
 		//get current process id
 		kpid = task_tgid_vnr(current);
 		//ignore client proces
@@ -392,6 +404,10 @@ int teadfs_request_write(loff_t offset, const char* src_data, int src_size, char
 
 	LOG_DBG("ENTRY\n");
 	do {
+		if (!teadfs_get_client_connect()) {
+			rc = -ENOMEM;
+			break;
+		}
 		//get current process id
 		kpid = task_tgid_vnr(current);
 		//ignore client proces

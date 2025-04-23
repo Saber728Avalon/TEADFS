@@ -7,7 +7,13 @@
 #include <iostream>
 #include <protocol.h>
 #include <memory.h>
-
+#include <linux/stat.h>
+#include <sys/types.h>
+#include <linux/limits.h>
+#include <sys/stat.h>
+#include <utime.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #define DATA_EXTENSION_SIZE 32
 
@@ -17,6 +23,8 @@ std::shared_ptr<TEAD::CThreadPool<std::string>> g_ptrThreadPool;
 std::shared_ptr<CNetlinkInfo> g_ptrNetlink;
 
 struct TEAFS_DEAL_CB g_deal_db;
+
+int g_miscDev = 0;
 
 static void deal_teadfs_msg(teadfs_packet_info* pPacketInfo) {
 	teadfs_packet_info* pResponsePacketInfo;
@@ -132,6 +140,10 @@ int StartTEADFS(struct TEAFS_DEAL_CB cb) {
 	// start thead pool. and set thread pool callback
 	g_ptrThreadPool = std::make_shared<TEAD::CThreadPool<std::string>>(thread_pool_cb_func);
 
+	g_miscDev = open("/dev/teadfs", O_RDONLY);
+	if (g_miscDev < 0) {
+		return -1;
+	}
 	//start netlink to kernel. and set get message callback function
 	g_ptrNetlink = std::make_shared<CNetlinkInfo>();
 	nRst = g_ptrNetlink->StartNetlink(netlink_rcv_cb_func);

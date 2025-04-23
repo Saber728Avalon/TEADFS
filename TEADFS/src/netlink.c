@@ -129,10 +129,19 @@ int teadfs_send_to_user(char* data, int size) {
 	return rc;
 }
 
+
+static teadfs_bind(int groups) {
+	int rc = groups;
+	LOG_DBG("ENTRY\n");
+
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+}
+
 int teadfs_start_netlink(void)
 {
 	struct netlink_kernel_cfg cfg = {
-		.input = teadfs_netlink_receive
+		.input = teadfs_netlink_receive,
+		.bind = teadfs_bind
 	};
 
 	LOG_DBG("ENTRY\n");

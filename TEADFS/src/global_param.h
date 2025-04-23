@@ -24,6 +24,9 @@ struct comm_msg_queue* teadfs_get_msg_queue(void);
 //user process
 pid_t teadfs_get_client_pid(void);
 void teadfs_set_client_pid(pid_t pid);
+
+int  teadfs_get_client_connect(void);
+void teadfs_set_clinet_connect(int connect);
 #endif
 
 
