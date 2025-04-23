@@ -33,6 +33,9 @@ struct teadfs_dentry_info {
 struct teadfs_file_info {
 	struct file* lower_file;
 	enum OPEN_FILE_RESULT access;
+	char* file_path;
+	int file_path_length;
+	char* file_path_buf;
 };
 
 

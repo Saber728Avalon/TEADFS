@@ -159,12 +159,12 @@ static int teadfs_request_open(char* file_path_start, int file_path_size, struct
 		packet = (struct teadfs_packet_info*)response_data;
 		//get file access code. is OPEN_FILE_RESULT
 		rc = packet->data.code.error_code;
-		//release mem
-		if (response_data) {
-			teadfs_free(response_data);
-		}
-		
 	} while (0);
+
+	//release mem
+	if (response_data) {
+		teadfs_free(response_data);
+	}
 	if (buffer_packet) {
 		teadfs_free(buffer_packet);
 	}
@@ -173,28 +173,20 @@ static int teadfs_request_open(char* file_path_start, int file_path_size, struct
 	return rc;
 }
 
-int teadfs_request_open_file(struct file* file) {
+int teadfs_request_open_file(struct file* file, struct teadfs_file_info* file_info) {
 	int rc = 0;
-	char* buffer_file_path = NULL;
-	int file_path_size = 0;
-	char* file_path_start = NULL;
-
 	// get file path
 	do {
-		buffer_file_path = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
-		if (!buffer_file_path) {
+		file_info->file_path_buf = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
+		if (!(file_info->file_path_buf)) {
 			rc = -ENOMEM;
 			break;
 		}
-		file_path_start = d_path(&file->f_path, buffer_file_path, PATH_MAX);
-		file_path_size = strlen(file_path_start);
+		file_info->file_path = d_path(&file->f_path, file_info->file_path_buf, PATH_MAX);
+		file_info->file_path_length = strlen(file_info->file_path);
 
-		rc = teadfs_request_open(file_path_start, file_path_size, file);
+		rc = teadfs_request_open(file_info->file_path, file_info->file_path_length, file);
 	} while (0);
-
-	if (buffer_file_path) {
-		teadfs_free(buffer_file_path);
-	}
 	return rc;
 }
 
@@ -225,14 +217,10 @@ int teadfs_request_open_path(struct path* path) {
 }
 
 //close file to user mode
-int teadfs_request_release(struct file* file) {
-	char* buffer_file_path = NULL;
+int teadfs_request_release(char* file_path_start, int file_path_size, struct file* file) {
 	char* buffer_packet = NULL;
 	int buffer_size = 0;
-	char* file_path_start = NULL;
-	struct dentry* teadfs_dentry = file->f_path.dentry;
 	int rc = 0;
-	int file_path_size = 0;
 	pid_t kpid = 0;
 	struct teadfs_packet_info* packet = NULL;
 	char* response_data = NULL;
@@ -240,6 +228,11 @@ int teadfs_request_release(struct file* file) {
 
 	LOG_DBG("ENTRY\n");
 	do {
+		if (!(file) || !(file->f_path.dentry) || !(file->f_path.mnt)) {
+			LOG_ERR("error file\n");
+			rc = -ENOMEM;
+			break;
+		}
 		//get current process id
 		kpid = task_tgid_vnr(current);
 		//ignore client proces
@@ -247,16 +240,6 @@ int teadfs_request_release(struct file* file) {
 			rc = -ENOMEM;
 			break;
 		}
-
-		// get file path
-		buffer_file_path = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
-		if (!buffer_file_path) {
-			rc = -ENOMEM;
-			break;
-		}
-		file_path_start = d_path(&file->f_path, buffer_file_path, PATH_MAX);
-		file_path_size = strlen(file_path_start);
-
 		//packet data ro usr
 		buffer_size = sizeof(struct teadfs_packet_info) + file_path_size;
 		buffer_packet = teadfs_zalloc(sizeof(struct teadfs_packet_info) + file_path_size, GFP_KERNEL);
@@ -297,16 +280,13 @@ int teadfs_request_release(struct file* file) {
 		packet = (struct teadfs_packet_info*)response_data;
 		//get file release code. is RELEASE_FILE_RESULT
 		rc = packet->data.code.error_code;
-		//release mem
-		if (response_data) {
-			teadfs_free(response_data);
-		}
 	} while (0);
+	//release mem
+	if (response_data) {
+		teadfs_free(response_data);
+	}
 	if (buffer_packet) {
 		teadfs_free(buffer_packet);
-	}
-	if (buffer_file_path) {
-		teadfs_free(buffer_file_path);
 	}
 	LOG_DBG("LEVAL rc:%d\n", rc);
 	return rc;
@@ -388,12 +368,12 @@ int teadfs_request_read(loff_t offset, const char* src_data, int src_size, char*
 			break;
 		}
 		memcpy(dst_data, (char*)packet + packet->data.read.read_data.offset, packet->data.read.read_data.size);
-		//release mem
-		if (response_data) {
-			teadfs_free(response_data);
-		}
 		rc = packet->data.read.read_data.size;
 	} while (0);
+	//release mem
+	if (response_data) {
+		teadfs_free(response_data);
+	}
 
 	LOG_DBG("LEVAL rc:%d\n", rc);
 	return rc;

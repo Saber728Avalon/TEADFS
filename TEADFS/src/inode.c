@@ -37,12 +37,13 @@ static int teadfs_create(struct inode* dir, struct dentry* dentry,
 	struct dentry* lower_parent_dentry = NULL;
 	struct inode* inode;
 	int unlock = 0;
+	struct path* lower_path = NULL;
 
 	LOG_DBG("ENTRY\n");
 	do {
 		//get low dentry
 		lower_dentry = teadfs_dentry_to_lower(dentry);
-
+		lower_path = teadfs_dentry_to_lower_path(dentry);
 		//lock directory
 		lower_parent_dentry = lock_parent(lower_dentry);
 		if (IS_ERR(lower_parent_dentry)) {
@@ -53,8 +54,10 @@ static int teadfs_create(struct inode* dir, struct dentry* dentry,
 		}
 		unlock = 1;
 		//create file or directory
+		path_get(lower_path);
 		rc = vfs_create(d_inode(lower_parent_dentry), lower_dentry, mode,
 			want_excl);
+		path_get(lower_path);
 		if (rc) {
 			LOG_ERR("%s: Failure to create dentry in lower fs; "
 				"rc = [%d]\n", __func__, rc);

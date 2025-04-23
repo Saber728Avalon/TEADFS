@@ -35,6 +35,15 @@ std::string GetProcPath(uint32_t u32PID) {
 	return strPath;
 }
 
+std::string GetFileName(std::string strPath) {
+	std::string strFileName = strPath;
+	size_t nPos = strPath.rfind("/");
+	if (std::string::npos != nPos) {
+		strFileName = strPath.substr(nPos);
+	}
+	return strFileName;
+}
+
 
 
 int open(uint64_t u64FileId, uint32_t u32PID, char* pszFilePath) {
@@ -79,6 +88,7 @@ int release(uint64_t u64FileId, uint32_t u32PID, char* pszFilePath) {
 	int nFlag = ENCRYPT_FILE_FLAG;
 
 	std::string strFilePath = pszFilePath;
+	std::string strFileName = GetFileName(strFilePath);
 	if (std::string::npos == strFilePath.find(".txt")) {
 		return TRFR_NORMAL;
 	}
@@ -125,9 +135,10 @@ int release(uint64_t u64FileId, uint32_t u32PID, char* pszFilePath) {
 	times[0] = stat.st_atim;
 	times[1] = stat.st_mtim;
 	futimens(fdDst, times);
+
+
 	close(fdDst);
 	close(fdSrc);
-	//unlink(pszFilePath);
 	rename(strTmpPath.c_str(), pszFilePath);
 	return TRFR_NORMAL;
 }

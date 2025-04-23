@@ -77,10 +77,12 @@ struct file* teadfs_get_lower_file(struct dentry* dentry, struct inode* inode, i
 		mutex_lock(&inode_info->lower_file_mutex);
 		//
 		count = atomic_inc_return(&inode_info->lower_file_count);
-		if (WARN_ON_ONCE(count < 1))
+		if (WARN_ON_ONCE(count < 1)) {
 			file = ERR_PTR(-EINVAL);
-		else if (count == 1) {
+		} else {
+			path_get(lower_path);
 			file = dentry_open(lower_path, flags, current_cred());
+			path_put(lower_path);
 			if (IS_ERR(file))
 				atomic_set(&inode_info->lower_file_count, 0);
 		}
@@ -96,6 +98,8 @@ void teadfs_put_lower_file(struct inode* inode, struct file* file)
 {
 	struct teadfs_inode_info* inode_info;
 	pid_t kpid = 0;
+	struct file* lower_file = teadfs_file_to_lower(file);
+	struct dentry* teadfs_dentry = file->f_path.dentry;
 
 	LOG_DBG("ENTRY\n");
 	//teadfs client not lock
@@ -103,25 +107,30 @@ void teadfs_put_lower_file(struct inode* inode, struct file* file)
 	if (kpid == teadfs_get_client_pid()) {
 		kpid = 0;
 	}
-	//release file open timnes
-	fput(file);
 
+	//
 	if (kpid) {
 		//check open count
 		inode_info = teadfs_inode_to_private(inode);
 		if (atomic_dec_and_mutex_lock(&inode_info->lower_file_count,
 			&inode_info->lower_file_mutex)) {
-			filemap_write_and_wait(inode->i_mapping);
-			//
-			LOG_DBG("ENTRY\n");
+			if (!(lower_file) || !(lower_file->f_path.dentry) || !(lower_file->f_path.mnt)) {
+				LOG_DBG("ENTRY\n");
+				filemap_write_and_wait(file->f_mapping);
+				//release file open timnes
+				path_get(&(lower_file->f_path));
+				fput(lower_file);
+				path_put(&(lower_file->f_path));
+			}
 			if (S_ISREG(inode->i_mode)) {
 				//send to user mode
-				teadfs_request_release(file);
+				teadfs_request_release(teadfs_file_to_private(file)->file_path, teadfs_file_to_private(file)->file_path_length, file);
 			}
 			mutex_unlock(&inode_info->lower_file_mutex);
 		}
 	} else {
-		filemap_write_and_wait(inode->i_mapping);
+		filemap_write_and_wait(file->f_mapping);
+		fput(lower_file);
 	}
 	LOG_DBG("LEVAL\n");
 }
@@ -351,17 +360,6 @@ static int teadfs_open(struct inode *inode, struct file *file)
 
 	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
-		if (S_ISREG(inode->i_mode)) {
-			access = teadfs_request_open_file(file);
-			if (OFR_PROHIBIT == access) {
-				rc = -EACCES;
-				break;
-			}
-			if (access <= 0) {
-				access = OFR_INIT;
-			}
-		}
-		LOG_DBG("ACCESS MODE:%d\n", access);
 		/* Released in ecryptfs_release or end of function if failure */
 		file_info = teadfs_zalloc(sizeof(struct teadfs_file_info), GFP_KERNEL);
 		teadfs_set_file_private(file, file_info);
@@ -369,6 +367,20 @@ static int teadfs_open(struct inode *inode, struct file *file)
 			LOG_ERR("Error attempting to allocate memory\n");
 			rc = -ENOMEM;
 			break;
+		}
+		file_info->lower_file = NULL;
+		file_info->access = access;
+		file_info->file_path = NULL;
+		file_info->file_path_buf = NULL;
+		file_info->file_path_length = 0;
+
+		if (S_ISREG(inode->i_mode)) {
+			access = teadfs_request_open_file(file, file_info);
+			if (OFR_PROHIBIT == access) {
+				rc = -EACCES;
+				break;
+			}
+			if (access <= 0) { access = OFR_INIT; }
 		}
 		/* open lower object and link wrapfs's file struct to lower's */
 		LOG_ERR("dentry:%px mnt:%px   lower_path:%px\n", lower_path->dentry, lower_path->mnt, lower_path);
@@ -386,10 +398,10 @@ static int teadfs_open(struct inode *inode, struct file *file)
 			break;
 		}
 		file_info->access = access;
-		if (OFR_DECRYPT == file_info->access) {
-			teadfs_replace_copy_address_space(inode, &(inode_info->i_decrypt), file->f_mapping);
-			file->f_mapping = &(inode_info->i_decrypt);
-		}
+		//if (OFR_DECRYPT == file_info->access) {
+		//	teadfs_replace_copy_address_space(inode, &(inode_info->i_decrypt), file->f_mapping);
+		//	file->f_mapping = &(inode_info->i_decrypt);
+		//}
 		LOG_ERR("lower_file:%px  access:%d\n", file_info->lower_file, access);
 		rc = 0;
 	} while (0);
@@ -403,9 +415,9 @@ static int teadfs_open(struct inode *inode, struct file *file)
 	return rc;
 }
 
-static int teadfs_flush(struct file *file, fl_owner_t td)
+static int teadfs_flush(struct file* file, fl_owner_t td)
 {
-	struct file *lower_file = teadfs_file_to_lower(file);
+	struct file* lower_file = teadfs_file_to_lower(file);
 	int rc = 0;
 
 	LOG_DBG("ENTRY file:%px lower_file:%px\n", file, lower_file);
@@ -421,14 +433,21 @@ static int teadfs_release(struct inode *inode, struct file *file)
 {
 	int rc = 0;
 	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
-	LOG_DBG("ENTRY file:%px lower_file:%px\n", file, file_info->lower_file);
+	LOG_DBG("ENTRY \n");
 
-	teadfs_put_lower_file(inode, file);
-
-	LOG_DBG("xx rc:%d\n", rc);
-	//release memory
-	teadfs_set_file_private(file, NULL);
-	teadfs_free(file_info);
+	//
+	if (file_info) {
+		LOG_DBG("ENTRY file:%px lower_file:%px\n", file, file_info->lower_file);
+		teadfs_put_lower_file(inode, file);
+		//release memory
+		if (file_info->file_path_buf) {
+			LOG_DBG("--------------------------LEVAL--------------\n");
+			teadfs_free(file_info->file_path_buf);
+			file_info->file_path_buf = NULL;
+		}
+		teadfs_set_file_private(file, NULL);
+		teadfs_free(file_info);
+	}
 	LOG_DBG("LEVAL\n");
 	return 0;
 }

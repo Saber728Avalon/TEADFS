@@ -86,13 +86,14 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
  */
 static void teadfs_d_release(struct dentry *dentry)
 {
-	LOG_DBG("ENTRY\n");
+	LOG_DBG("ENTRY name:%s\n", dentry->d_name.name);
 	if (teadfs_dentry_to_private(dentry)) {
 		if (teadfs_dentry_to_lower(dentry)) {
 			dput(teadfs_dentry_to_lower(dentry));
 			mntput(teadfs_dentry_to_lower_path(dentry)->mnt);
 		}
 		teadfs_free(teadfs_dentry_to_private(dentry));
+		teadfs_set_dentry_private(dentry, NULL);
 	}
 	LOG_DBG("LEVAL\n");
 	return;
