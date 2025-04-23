@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <memory.h>
 #include <linux/limits.h>
+#include <sys/stat.h>
+#include <utime.h>
 
 
 #define ENCRYPT_FILE_FLAG 0x44414554
@@ -111,9 +113,20 @@ int release(uint64_t u64FileId, uint32_t u32PID, char* pszFilePath) {
 		}
 		write(fdDst, chBuf, nRead);
 	} while (1);
+
+
+	struct stat stat = { 0 };
+	fstat(fdSrc, &stat);
+	fchmod(fdDst, stat.st_mode);
+	
+	fchown(fdDst, stat.st_uid, stat.st_gid);
+	struct timespec times[2] = { 0 };
+
+	times[0] = stat.st_atim;
+	times[1] = stat.st_mtim;
+	futimens(fdDst, times);
 	close(fdDst);
 	close(fdSrc);
-
 	//unlink(pszFilePath);
 	rename(strTmpPath.c_str(), pszFilePath);
 	return TRFR_NORMAL;
@@ -134,7 +147,7 @@ int write(uint64_t offset,  uint32_t u32SrcSize, char* pSrcData, uint32_t* u32Ds
 		pDstData[i] = pSrcData[i] ^ 0x13;
 	}
 	*u32DstSize = u32SrcSize;
-	printf("[read]  dest size :%d\n", *u32DstSize);
+	printf("[write]  dest size :%d\n", *u32DstSize);
 	return 1;
 }
 

@@ -145,7 +145,7 @@ static ssize_t teadfs_aio_read_update_atime(struct kiocb *iocb,
 	ssize_t rc;
 	struct path lower;
 	struct file *file = iocb->ki_filp;
-	struct file* lower_file  = teadfs_file_to_lower(file);
+	struct teadfs_file_info *file_info  = teadfs_file_to_private(file);
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -164,6 +164,9 @@ static ssize_t teadfs_aio_read_update_atime(struct kiocb *iocb,
 			lower.dentry = teadfs_dentry_to_lower(file->f_path.dentry);
 			lower.mnt = teadfs_dentry_to_lower_path(file->f_path.dentry)->mnt;
 			touch_atime(&lower);
+		}
+		if (OFR_DECRYPT == file_info->access) {
+			rc -= ENCRYPT_FILE_HEADER_SIZE;
 		}
 	} while (0);
 	
