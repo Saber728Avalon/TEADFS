@@ -398,10 +398,10 @@ static int teadfs_open(struct inode *inode, struct file *file)
 			break;
 		}
 		file_info->access = access;
-		//if (OFR_DECRYPT == file_info->access) {
-		//	teadfs_replace_copy_address_space(inode, &(inode_info->i_decrypt), file->f_mapping);
-		//	file->f_mapping = &(inode_info->i_decrypt);
-		//}
+		if (OFR_DECRYPT == file_info->access) {
+			teadfs_replace_copy_address_space(inode, &(inode_info->i_decrypt), file->f_mapping);
+			file->f_mapping = &(inode_info->i_decrypt);
+		}
 		LOG_ERR("lower_file:%px  access:%d\n", file_info->lower_file, access);
 		rc = 0;
 	} while (0);
