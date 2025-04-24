@@ -174,14 +174,9 @@ struct dentry* teadfs_lookup(struct inode* ecryptfs_dir_inode,
 
 	LOG_DBG("ENTRY path:%s\n", dentry->d_name.name);
 	do {
-		LOG_DBG("ENTRY\n");
-		BUG_ON(0);
 		parent = dget_parent(dentry);
-		LOG_DBG("ENTRY\n");
 		teadfs_get_lower_path(parent, &lower_parent_path);
-		LOG_DBG("ENTRY\n");
 		lower_dir_dentry = lower_parent_path.dentry;
-		LOG_DBG("ENTRY\n");
 		mutex_lock(&lower_dir_dentry->d_inode->i_mutex);
 		lower_dentry = lookup_one_len(dentry->d_name.name,
 			lower_dir_dentry,

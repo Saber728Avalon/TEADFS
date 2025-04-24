@@ -51,10 +51,10 @@
  */
 static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 {
-	struct dentry *lower_dentry;
+	struct dentry *lower_dentry = NULL;
 	int rc = 1;
 	struct path lower_path;
-	
+
 	do {
 		if (flags & LOOKUP_RCU) {
 			rc = -ECHILD;
@@ -75,7 +75,10 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 		}
 		LOG_DBG("LEVAL rc:%d\n", rc);
 	} while (0);
-	teadfs_put_lower_path(dentry, &lower_path);
+
+	if (lower_dentry) {
+		teadfs_put_lower_path(dentry, &lower_path);
+	}
 	return rc;
 }
 

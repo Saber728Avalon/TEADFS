@@ -174,9 +174,7 @@ static ssize_t teadfs_aio_read_update_atime(struct kiocb *iocb,
 		if (-EIOCBQUEUED == rc)
 			rc = wait_on_sync_kiocb(iocb);
 		if (rc >= 0) {
-			teadfs_get_lower_path(file->f_path.dentry, &lower_path);
 			touch_atime(&lower_path);
-			teadfs_put_lower_path(file->f_path.dentry, &lower_path);
 		}
 		if (OFR_DECRYPT == file_info->access) {
 			rc -= ENCRYPT_FILE_HEADER_SIZE;
@@ -363,6 +361,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 
 	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
+		BUG_ON(0);
 		/* Released in ecryptfs_release or end of function if failure */
 		file_info = teadfs_zalloc(sizeof(struct teadfs_file_info), GFP_KERNEL);
 		teadfs_set_file_private(file, file_info);

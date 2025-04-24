@@ -183,11 +183,11 @@ static int __init teadfs_module_init(void) {
             LOG_ERR("Failed to register filesystem\n");
             break;
         }
-		//create netlink
-		teadfs_start_netlink();
-
 		//init param
 		teadfs_init_global_param();
+
+		//create netlink
+		teadfs_start_netlink();
 
 		// check client is connect ?
 		teadfs_init_miscdev();
