@@ -126,11 +126,14 @@ static void teadfs_destroy_inode(struct inode *inode)
  */
 static int teadfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 {
-	struct dentry *lower_dentry = teadfs_dentry_to_lower(dentry);
 	int rc;
+	struct path lower_path;
+	struct dentry* lower_dentry;
 
 	LOG_DBG("ENTRY\n");
 	do {
+		teadfs_get_lower_path(dentry, &lower_path);
+		lower_dentry = lower_path.dentry;
 		if (!lower_dentry->d_sb->s_op->statfs) {
 			rc = -ENOSYS;
 			break;
@@ -141,6 +144,7 @@ static int teadfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 
 		buf->f_type = TEADFS_SUPER_MAGIC;
 	} while (0);
+	teadfs_put_lower_path(dentry, &lower_path);
 	LOG_DBG("LEVAL %d\n", rc);
 	return rc;
 }

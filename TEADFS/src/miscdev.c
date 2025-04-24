@@ -54,11 +54,39 @@ teadfs_miscdev_release(struct inode* inode, struct file* file)
 	return rc;
 }
 
+static ssize_t
+teadfs_miscdev_read(struct file* file, char __user* buf, size_t count,
+	loff_t* ppos) {
+	int rc = -EFAULT;
+	LOG_DBG("ENTRY \n");
+	LOG_DBG("LEVAL rc:%d\n", rc);
+	return rc;
+}
 
+static ssize_t
+teadfs_miscdev_write(struct file* file, const char __user* buf,
+	size_t count, loff_t* ppos) {
+	int rc = -EFAULT;
+	LOG_DBG("ENTRY \n");
+	LOG_DBG("LEVAL rc:%d\n", rc);
+	return rc;
+}
+
+static unsigned int
+teadfs_miscdev_poll(struct file* file, poll_table* pt) {
+	int rc = 0;
+	LOG_DBG("ENTRY \n");
+	LOG_DBG("LEVAL rc:%d\n", rc);
+	return rc;
+}
 static const struct file_operations teadfs_miscdev_fops = {
 	.owner = THIS_MODULE,
 	.open = teadfs_miscdev_open,
-	.release = teadfs_miscdev_release
+	.poll = teadfs_miscdev_poll,
+	.release = teadfs_miscdev_release,
+	.read = teadfs_miscdev_read,
+	.write = teadfs_miscdev_write,
+	.llseek = noop_llseek
 };
 
 static struct miscdevice teadfs_miscdev = {

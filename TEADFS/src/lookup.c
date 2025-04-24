@@ -97,8 +97,9 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 	struct teadfs_dentry_info* dentry_info;
 	struct vfsmount* lower_mnt;
 	int rc = 0;
-	struct path path;
-
+	struct path lower_path;
+	struct dentry* parent;
+	struct path lower_parent_path;
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -111,15 +112,20 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 			rc = -ENOMEM;
 			break;
 		}
-
-		lower_mnt = mntget(teadfs_dentry_to_lower_path(dentry->d_parent)->mnt);
-		fsstack_copy_attr_atime(dir_inode, lower_dentry->d_parent->d_inode);
-
 		teadfs_set_dentry_private(dentry, dentry_info);
+		spin_lock_init(&(dentry_info->lock));
 
-		path.dentry = lower_dentry;
-		path.mnt = lower_mnt;
-		teadfs_set_lower_path(dentry, &path);
+		parent = dget_parent(dentry);
+		teadfs_get_lower_path(parent, &lower_parent_path);
+		lower_mnt = mntget(lower_parent_path.mnt);
+		fsstack_copy_attr_atime(dir_inode, parent->d_inode);
+		teadfs_put_lower_path(parent, &lower_parent_path);
+		dput(parent);
+		LOG_DBG("dentry:%px, lower_dentry:%px,lower_mnt:%px\n", dentry, lower_dentry, lower_mnt);
+
+		lower_path.dentry = lower_dentry;
+		lower_path.mnt = lower_mnt;
+		teadfs_set_lower_path(dentry, &lower_path);
 
 		if (!lower_dentry->d_inode) {
 			/* We want to add because we couldn't find in lower */
@@ -139,7 +145,12 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
 			unlock_new_inode(inode);
 		d_add(dentry, inode);
 	} while (0);
-	LOG_DBG("rc = [%d]\n", rc);
+	if (rc) {
+		LOG_ERR("ERROR :%d\n", rc);
+		teadfs_free(teadfs_dentry_to_private(dentry));
+		teadfs_set_dentry_private(dentry, NULL);
+	}
+	LOG_DBG("LEAVEL rc = [%d]\n", rc);
 	return rc;
 }
 
@@ -155,34 +166,46 @@ static int teadfs_lookup_interpose(struct dentry* dentry,
  * dentry cache and continue on to read it from the disk.
  */
 struct dentry* teadfs_lookup(struct inode* ecryptfs_dir_inode,
-	struct dentry* ecryptfs_dentry,
-	unsigned int flags)
-{
-	struct dentry* lower_dir_dentry, * lower_dentry;
+	struct dentry* dentry,
+	unsigned int flags)  {
+	struct dentry* lower_dir_dentry, *lower_dentry, *parent = NULL;
 	int rc = 0;
+	struct path lower_parent_path;
 
-	LOG_DBG("ENTRY path:%s\n", ecryptfs_dentry->d_name.name);
+	LOG_DBG("ENTRY path:%s\n", dentry->d_name.name);
 	do {
-		lower_dir_dentry = teadfs_dentry_to_lower(ecryptfs_dentry->d_parent);
+		LOG_DBG("ENTRY\n");
+		BUG_ON(0);
+		parent = dget_parent(dentry);
+		LOG_DBG("ENTRY\n");
+		teadfs_get_lower_path(parent, &lower_parent_path);
+		LOG_DBG("ENTRY\n");
+		lower_dir_dentry = lower_parent_path.dentry;
+		LOG_DBG("ENTRY\n");
 		mutex_lock(&lower_dir_dentry->d_inode->i_mutex);
-		lower_dentry = lookup_one_len(ecryptfs_dentry->d_name.name,
+		lower_dentry = lookup_one_len(dentry->d_name.name,
 			lower_dir_dentry,
-			ecryptfs_dentry->d_name.len);
+			dentry->d_name.len);
 		mutex_unlock(&lower_dir_dentry->d_inode->i_mutex);
 		if (IS_ERR(lower_dentry)) {
 			rc = PTR_ERR(lower_dentry);
 			LOG_ERR("%s: lookup_one_len() returned "
 				"[%d] on lower_dentry = [%s]\n", __func__, rc,
-				ecryptfs_dentry->d_name.name);
+				dentry->d_name.name);
 			break;
 		}
-		if (lower_dentry->d_inode)
+		if (lower_dentry->d_inode) {
+			LOG_ERR("Find d_inode \n");
 			break;
+		}
 		dput(lower_dentry);
 	} while (0);
-	rc = teadfs_lookup_interpose(ecryptfs_dentry, lower_dentry,
+	rc = teadfs_lookup_interpose(dentry, lower_dentry,
 		ecryptfs_dir_inode);
-	LOG_DBG("rc = [%d]\n", rc);
+
+	dput(parent);
+	teadfs_put_lower_path(parent, &lower_parent_path);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return ERR_PTR(rc);
 }
 

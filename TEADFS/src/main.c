@@ -116,7 +116,7 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 		root_info = teadfs_zalloc(sizeof(struct teadfs_dentry_info), GFP_KERNEL);
 		if (!root_info)
 			break;
-
+		spin_lock_init(&(root_info->lock));
 		/* ->kill_sb() will take care of root_info */
 		teadfs_set_dentry_private(s->s_root, root_info);
 		teadfs_set_lower_path(s->s_root, &lower_path);

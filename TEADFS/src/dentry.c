@@ -53,14 +53,15 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 {
 	struct dentry *lower_dentry;
 	int rc = 1;
-
+	struct path lower_path;
 	
 	do {
 		if (flags & LOOKUP_RCU) {
 			rc = -ECHILD;
 			break;
 		}
-		lower_dentry = teadfs_dentry_to_lower(dentry);
+		teadfs_get_lower_path(dentry, &lower_path);
+		lower_dentry = lower_path.dentry;
 		if (!lower_dentry->d_op || !lower_dentry->d_op->d_revalidate)
 			break;
 
@@ -74,6 +75,7 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 		}
 		LOG_DBG("LEVAL rc:%d\n", rc);
 	} while (0);
+	teadfs_put_lower_path(dentry, &lower_path);
 	return rc;
 }
 
@@ -86,12 +88,17 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
  */
 static void teadfs_d_release(struct dentry *dentry)
 {
+	struct path lower_path;
+	struct dentry* lower_dentry;
+
 	LOG_DBG("ENTRY name:%s\n", dentry->d_name.name);
 	if (teadfs_dentry_to_private(dentry)) {
-		if (teadfs_dentry_to_lower(dentry)) {
-			dput(teadfs_dentry_to_lower(dentry));
-			mntput(teadfs_dentry_to_lower_path(dentry)->mnt);
-		}
+		teadfs_get_lower_path(dentry, &lower_path);
+		lower_dentry = lower_path.dentry;
+		dput(lower_path.dentry);
+		mntput(lower_path.mnt);
+		teadfs_put_lower_path(dentry, &lower_path);
+
 		teadfs_free(teadfs_dentry_to_private(dentry));
 		teadfs_set_dentry_private(dentry, NULL);
 	}

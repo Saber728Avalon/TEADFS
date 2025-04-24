@@ -10,7 +10,7 @@
 #if defined(CONFIG_BDICONFIG_BDI)
 	#include <linux/backing-dev.h>
 #endif
-
+#include "teadfs_log.h"
 
 #define TEADFS_SUPER_MAGIC 0x44414554
 
@@ -26,6 +26,7 @@ struct teadfs_sb_info {
 
 /* wrapfs dentry data in memory */
 struct teadfs_dentry_info {
+	spinlock_t lock; /* protects lower_path */
 	struct path lower_path;
 };
 
@@ -121,24 +122,50 @@ teadfs_set_dentry_private(struct dentry* dentry,
 {
 	dentry->d_fsdata = dentry_info;
 }
-
-static inline struct dentry*
-teadfs_dentry_to_lower(struct dentry* dentry)
-{
-	return ((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.dentry;
+/* path based (dentry/mnt) macros */
+static inline void pathcpy(struct path* dst, const struct path* src) {
+	dst->dentry = src->dentry;
+	dst->mnt = src->mnt;
 }
-static inline struct path*
-teadfs_dentry_to_lower_path(struct dentry* dentry)
-{
-	return &((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path;
-}
-static void teadfs_set_lower_path(const struct dentry* dentry, struct path* lower_path) {
-	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.dentry = lower_path->dentry;
-	((struct teadfs_dentry_info*)dentry->d_fsdata)->lower_path.mnt = lower_path->mnt;
+/* Returns struct path.  Caller must path_put it. */
+static inline void teadfs_get_lower_path(const struct dentry* dent,
+	struct path* lower_path) {
+	LOG_DBG("ENTRY\n");
+	spin_lock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+	pathcpy(lower_path, &(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lower_path));
+	path_get(lower_path);
+	spin_unlock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+	LOG_DBG("ENTRY\n");
 	return;
 }
-
-
+static inline void teadfs_put_lower_path(const struct dentry* dent,
+	struct path* lower_path) {
+	LOG_DBG("ENTRY\n");
+	path_put(lower_path);
+	LOG_DBG("ENTRY\n");
+	return;
+}
+static inline void teadfs_set_lower_path(const struct dentry* dent,
+	struct path* lower_path) {
+	LOG_DBG("ENTRY\n");
+	spin_lock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+	pathcpy(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lower_path), lower_path);
+	spin_unlock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+	LOG_DBG("ENTRY\n");
+	return;
+}
+static inline void wrapfs_put_reset_lower_path(const struct dentry* dent) {
+	struct path lower_path;
+	LOG_DBG("ENTRY\n");
+	spin_lock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+	pathcpy(&lower_path, &(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lower_path));
+	((struct teadfs_dentry_info*)(dent)->d_fsdata)->lower_path.dentry = NULL;
+	((struct teadfs_dentry_info*)(dent)->d_fsdata)->lower_path.mnt = NULL;
+	spin_unlock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+	path_put(&lower_path);
+	LOG_DBG("ENTRY\n");
+	return;
+}
 
 
 static inline struct teadfs_inode_info*
