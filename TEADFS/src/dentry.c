@@ -73,7 +73,7 @@ static int teadfs_d_revalidate(struct dentry *dentry, unsigned int flags)
 
 			fsstack_copy_attr_all(dentry->d_inode, lower_inode);
 		}
-		LOG_DBG("LEVAL rc:%d\n", rc);
+		LOG_DBG("LEVAL rc : [%d]\n", rc);
 	} while (0);
 
 	if (lower_dentry) {

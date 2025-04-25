@@ -129,30 +129,31 @@ static inline void pathcpy(struct path* dst, const struct path* src) {
 }
 /* Returns struct path.  Caller must path_put it. */
 static inline void teadfs_get_lower_path(const struct dentry* dent, struct path* lower_path) {
-	spin_lock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
-	LOG_DBG("ENTRY %d\n", dent->d_lockref.count);
-	pathcpy(lower_path, &(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lower_path));
+	struct teadfs_dentry_info* lower_dentry = teadfs_dentry_to_private(dent);
+	spin_lock(&(lower_dentry->lock));
+	LOG_DBG("ENTRY %d\n", lower_dentry->lower_path.dentry->d_lockref.count);
+	pathcpy(lower_path, &(lower_dentry->lower_path));
 	//path_get(lower_path);
-	spin_unlock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+	spin_unlock(&(lower_dentry->lock));
 	LOG_DBG("LEAVE\n");
 	return;
 }
-static inline void teadfs_put_lower_path(const struct dentry* dent,
-	struct path* lower_path) {
-	spin_lock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
-	LOG_DBG("ENTRY %d\n", dent->d_lockref.count);
+static inline void teadfs_put_lower_path(const struct dentry* dent, struct path* lower_path) {
+	struct teadfs_dentry_info* lower_dentry = teadfs_dentry_to_private(dent);
+	spin_lock(&(lower_dentry->lock));
+	LOG_DBG("ENTRY %d\n", lower_dentry->lower_path.dentry->d_lockref.count);
 	//path_put(lower_path);
-	spin_unlock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+	spin_unlock(&(lower_dentry->lock));
 	LOG_DBG("LEAVE\n");
 	return;
 }
-static inline void teadfs_set_lower_path(const struct dentry* dent,
-	struct path* lower_path) {
-	LOG_DBG("ENTRY %d\n", dent->d_lockref.count);
-	spin_lock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
+static inline void teadfs_set_lower_path(const struct dentry* dent, struct path* lower_path) {
+	struct teadfs_dentry_info* lower_dentry = teadfs_dentry_to_private(dent);
+	LOG_DBG("ENTRY\n");
+	spin_lock(&(lower_dentry->lock));
 	pathcpy(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lower_path), lower_path);
-	spin_unlock(&(((struct teadfs_dentry_info*)(dent)->d_fsdata)->lock));
-	LOG_DBG("LEAVE\n");
+	spin_unlock(&(lower_dentry->lock));
+	LOG_DBG("LEAVE %d\n", lower_dentry->lower_path.dentry->d_lockref.count);
 	return;
 }
 static inline void wrapfs_put_reset_lower_path(const struct dentry* dent) {

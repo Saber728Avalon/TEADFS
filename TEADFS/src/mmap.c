@@ -39,7 +39,6 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 			rc = -EIO;
 			break;
 		}
-		LOG_ERR("file:%px, lower_file:%px\n", file, file_info->lower_file);
 		if (OFR_DECRYPT == file_info->access) {
 			offset += ENCRYPT_FILE_HEADER_SIZE;
 		}
@@ -59,7 +58,7 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 		}
 
 	} while (0);
-	LOG_DBG("LEVAL %d\n", rc);
+	LOG_DBG("LEVAL rc ; [%d]\n", rc);
 	return rc;
 }
 
@@ -92,7 +91,6 @@ int teadfs_write_lower(struct file* file, char* data,
 			rc = -EIO;
 			break;
 		}
-		LOG_ERR("file:%px, lower_file:%px\n", file, file_info->lower_file);
 		buf = teadfs_zalloc(size, GFP_KERNEL);
 		if (!buf) {
 			rc = -EIO;
@@ -126,7 +124,7 @@ int teadfs_write_lower(struct file* file, char* data,
 	if (buf) {
 		teadfs_free(buf);
 	}
-	LOG_DBG("LEVAL %d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -162,7 +160,7 @@ static int teadfs_readpage(struct file* file, struct page* page)
 		unlock_page(page);
 	} while (0);
 
-	LOG_DBG("LEVAL %d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -252,7 +250,7 @@ static int treadfs_write_begin(struct file* file,
 		page_cache_release(page);
 		*pagep = NULL;
 	}
-	LOG_DBG("LEVAL %d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -300,7 +298,7 @@ static int teadfs_write_end(struct file* file,
 	unlock_page(page);
 	page_cache_release(page);
 
-	LOG_DBG("LEVAL %d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -322,7 +320,7 @@ static int teadfs_writepage(struct page* page, struct writeback_control* wbc)
 
 	SetPageUptodate(page);
 	unlock_page(page);
-	LOG_DBG("LEVAL %d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -340,7 +338,7 @@ static sector_t teadfs_bmap(struct address_space* mapping, sector_t block)
 		rc = lower_inode->i_mapping->a_ops->bmap(lower_inode->i_mapping,
 			block);
 
-	LOG_DBG("LEVAL %d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 

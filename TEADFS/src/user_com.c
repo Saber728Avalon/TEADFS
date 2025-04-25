@@ -36,7 +36,7 @@ static void teadfs_request_wait_answer(struct teadfs_msg_ctx* ctx) {
 			break;
 		}
 	} while (0);
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return;
 }
 
@@ -82,7 +82,7 @@ static int teadfs_request_send(__u64 msg_id, size_t request_size, char* request_
 		//free mem
 		teadfs_free(ctx);
 	} while (0);
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -173,7 +173,7 @@ static int teadfs_request_open(char* file_path_start, int file_path_size, struct
 		teadfs_free(buffer_packet);
 	}
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -191,6 +191,7 @@ int teadfs_request_open_file(struct file* file, struct teadfs_file_info* file_in
 
 		rc = teadfs_request_open(file_info->file_path, file_info->file_path_length, file);
 	} while (0);
+	LOG_INF("file:%s\n", file_info->file_path);
 	return rc;
 }
 
@@ -214,6 +215,7 @@ int teadfs_request_open_path(struct path* path) {
 		rc = teadfs_request_open(file_path_start, file_path_size, NULL);
 	} while (0);
 
+	LOG_INF("file:%s\n", file_path_start);
 	if (buffer_file_path) {
 		teadfs_free(buffer_file_path);
 	}
@@ -231,6 +233,7 @@ int teadfs_request_release(char* file_path_start, int file_path_size, struct fil
 	size_t response_size = 0;
 
 	LOG_DBG("ENTRY\n");
+	LOG_INF("%s\n", file_path_start);
 	do {
 		if (!teadfs_get_client_connect()) {
 			rc = -ENOMEM;
@@ -296,7 +299,7 @@ int teadfs_request_release(char* file_path_start, int file_path_size, struct fil
 	if (buffer_packet) {
 		teadfs_free(buffer_packet);
 	}
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -387,7 +390,7 @@ int teadfs_request_read(loff_t offset, const char* src_data, int src_size, char*
 		teadfs_free(response_data);
 	}
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -474,6 +477,6 @@ int teadfs_request_write(loff_t offset, const char* src_data, int src_size, char
 		rc = packet->data.write.write_data.size;
 	} while (0);
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }

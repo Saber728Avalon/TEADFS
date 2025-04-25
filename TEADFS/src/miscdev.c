@@ -35,7 +35,7 @@ teadfs_miscdev_open(struct inode* inode, struct file* file) {
 		teadfs_set_clinet_connect(1);
 	} while (0);
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -50,7 +50,7 @@ teadfs_miscdev_release(struct inode* inode, struct file* file)
 		teadfs_set_clinet_connect(0);
 	} while (0);
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -59,7 +59,7 @@ teadfs_miscdev_read(struct file* file, char __user* buf, size_t count,
 	loff_t* ppos) {
 	int rc = -EFAULT;
 	LOG_DBG("ENTRY \n");
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -68,7 +68,7 @@ teadfs_miscdev_write(struct file* file, const char __user* buf,
 	size_t count, loff_t* ppos) {
 	int rc = -EFAULT;
 	LOG_DBG("ENTRY \n");
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -76,7 +76,7 @@ static unsigned int
 teadfs_miscdev_poll(struct file* file, poll_table* pt) {
 	int rc = 0;
 	LOG_DBG("ENTRY \n");
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 static const struct file_operations teadfs_miscdev_fops = {

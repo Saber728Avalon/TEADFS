@@ -26,7 +26,7 @@ int teadfs_init_global_param(void) {
 	mutex_init(&(g_comm_msg_queue.mux));
 	INIT_LIST_HEAD(&(g_comm_msg_queue.msg_ctx_queue));
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 

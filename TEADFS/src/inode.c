@@ -39,7 +39,7 @@ static int teadfs_create(struct inode* dir, struct dentry* dentry,
 	int unlock = 0;
 	struct path lower_path;
 
-	LOG_DBG("ENTRY\n");
+	LOG_DBG("ENTRY file:%s\n", dentry->d_name.name);
 	do {
 		//get low dentry
 		teadfs_get_lower_path(dentry, &lower_path);
@@ -101,12 +101,9 @@ static int teadfs_getattr(struct vfsmount* mnt, struct dentry* dentry,
 	struct path lower_path;
 	struct dentry* lower_dentry;
 
-	LOG_DBG("ENTRY\n");
+	LOG_INF("ENTRY :%s\n", dentry->d_name.name);
 	teadfs_get_lower_path(dentry, &lower_path);
 	lower_dentry = lower_path.dentry;
-
-	LOG_DBG("dentry:%px, lower_dentry:%px,lower_mnt:%px\n", dentry, lower_dentry, lower_path.mnt);
-
 	rc = vfs_getattr(&lower_path, &lower_stat);
 	if (!rc) {
 		fsstack_copy_attr_all(dentry->d_inode,
@@ -114,15 +111,13 @@ static int teadfs_getattr(struct vfsmount* mnt, struct dentry* dentry,
 		generic_fillattr(dentry->d_inode, stat);
 		stat->blocks = lower_stat.blocks;
 
-		LOG_DBG("++++++++++++++++++++++++++++++++++++++++++++++++dentry:%px\n", dentry);
 		access = teadfs_request_open_path(&lower_path);
 		if (OFR_DECRYPT == access) {
 			(*stat).size -= ENCRYPT_FILE_HEADER_SIZE;
-			LOG_DBG("++++++++++++++++++++++++++++++++++++++++++++++++size:%lld\n", (*stat).size);
 		}
 	}
 	teadfs_put_lower_path(dentry, &lower_path);
-	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	LOG_INF("LEAVE rc = [%d]\n", rc);
 	return rc;
 }
 
@@ -148,9 +143,8 @@ static int teadfs_setattr(struct dentry* dentry, struct iattr* ia)
 	struct inode* lower_inode;
 	struct path lower_path;
 
-	LOG_DBG("ENTRY\n");
+	LOG_INF("ENTRY :%s\n", dentry->d_name.name);
 	do {
-
 		inode = dentry->d_inode;
 		lower_inode = teadfs_inode_to_lower(inode);
 		teadfs_get_lower_path(dentry, &lower_path);
@@ -180,7 +174,7 @@ static int teadfs_setattr(struct dentry* dentry, struct iattr* ia)
 	} while (0);
 	fsstack_copy_attr_all(inode, lower_inode);
 	teadfs_put_lower_path(dentry, &lower_path);
-	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	LOG_INF("LEAVE rc = [%d]\n", rc);
 	return rc;
 }
 

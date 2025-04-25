@@ -173,7 +173,7 @@ void TestFunc() {
 	char* pData = "Abc123,./";
 	char* pFilePath = "/test/4.txt";
 
-	printf("Start Edif:%s \n");
+	printf("Start Edit\n");
 	int fdDst = open(pFilePath, O_RDWR);
 	if (fdDst < 0) {
 		printf("open file \n");

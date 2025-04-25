@@ -155,7 +155,7 @@ static int teadfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 		buf->f_type = TEADFS_SUPER_MAGIC;
 	} while (0);
 	teadfs_put_lower_path(dentry, &lower_path);
-	LOG_DBG("LEVAL %d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 

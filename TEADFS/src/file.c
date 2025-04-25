@@ -181,7 +181,7 @@ static ssize_t teadfs_aio_read_update_atime(struct kiocb *iocb,
 		}
 	} while (0);
 	teadfs_put_lower_path(file->f_path.dentry, &lower_path);
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -213,7 +213,7 @@ static ssize_t teadfs_aio_write(struct kiocb* iocb,
 		}
 	} while (0);
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -255,7 +255,7 @@ static ssize_t teadfs_aio_write(struct kiocb* iocb,
 		if (rc >= 0)
 			buf->entries_written++;
 
-		LOG_DBG("LEVAL rc:%d\n", rc);
+		LOG_DBG("LEVAL rc [:%d]\n", rc);
 		return rc;
 	}
 
@@ -319,7 +319,7 @@ static ssize_t teadfs_aio_write(struct kiocb* iocb,
 			fsstack_copy_attr_atime(inode,
 				file_inode(lower_file));
 	} while (0);
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -359,7 +359,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 	struct teadfs_inode_info* inode_info = teadfs_inode_to_private(inode);
 
 
-	LOG_DBG("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
+	LOG_INF("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
 		BUG_ON(0);
 		/* Released in ecryptfs_release or end of function if failure */
@@ -402,7 +402,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 			teadfs_replace_copy_address_space(inode, &(inode_info->i_decrypt), file->f_mapping);
 			file->f_mapping = &(inode_info->i_decrypt);
 		}
-		LOG_ERR("lower_file:%px  access:%d\n", file_info->lower_file, access);
+		LOG_DBG("lower_file:%px  access:%d\n", file_info->lower_file, access);
 		rc = 0;
 	} while (0);
 	//release memory
@@ -411,7 +411,7 @@ static int teadfs_open(struct inode *inode, struct file *file)
 		teadfs_free(teadfs_file_to_private(file));
 		teadfs_set_file_private(file, NULL);
 	}
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_INF("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -425,7 +425,7 @@ static int teadfs_flush(struct file* file, fl_owner_t td)
 		filemap_write_and_wait(file->f_mapping);
 		rc = lower_file->f_op->flush(lower_file, td);
 	}
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -433,9 +433,9 @@ static int teadfs_release(struct inode *inode, struct file *file)
 {
 	int rc = 0;
 	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
-	LOG_DBG("ENTRY \n");
-
+	struct dentry* dentry = file->f_path.dentry;
 	//
+	LOG_INF("ENTRY file:%px name:%s\n", file, dentry->d_name.name);
 	if (file_info) {
 		LOG_DBG("ENTRY file:%px lower_file:%px\n", file, file_info->lower_file);
 		teadfs_put_lower_file(inode, file);
@@ -448,7 +448,7 @@ static int teadfs_release(struct inode *inode, struct file *file)
 		teadfs_set_file_private(file, NULL);
 		teadfs_free(file_info);
 	}
-	LOG_DBG("LEVAL\n");
+	LOG_INF("LEVAL\n");
 	return 0;
 }
 
@@ -486,7 +486,7 @@ static int teadfs_fasync(int fd, struct file *file, int flag)
 	if (lower_file->f_op && lower_file->f_op->fasync)
 		rc = lower_file->f_op->fasync(fd, lower_file, flag);
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -503,7 +503,7 @@ teadfs_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	if (lower_file && lower_file->f_op && lower_file->f_op->unlocked_ioctl)
 		rc = lower_file->f_op->unlocked_ioctl(lower_file, cmd, arg);
 
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 
@@ -519,7 +519,7 @@ teadfs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		lower_file = teadfs_file_to_lower(file);
 	if (lower_file && lower_file->f_op && lower_file->f_op->compat_ioctl)
 		rc = lower_file->f_op->compat_ioctl(lower_file, cmd, arg);
-	LOG_DBG("LEVAL rc:%d\n", rc);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
 #endif
