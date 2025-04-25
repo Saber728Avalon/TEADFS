@@ -12,7 +12,7 @@ void teadfs_log(enum TEADFS_LOG_LEVEL level, const char* format, ...) {
 	switch (level)
 	{
 	case TLL_DBG:
-		//vprintk(format, args);
+		vprintk(format, args);
 		break;
 	case TLL_INF:
 		vprintk(format, args);

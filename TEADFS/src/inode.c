@@ -5,6 +5,7 @@
 #include "protocol.h"
 #include "file.h"
 #include "user_com.h"
+#include "mem.h"
 
 #include <linux/fs.h>
 #include <linux/fs_stack.h>
@@ -216,13 +217,16 @@ static int teadfs_readlink_lower(struct dentry* dentry, char** buf,
 
 	LOG_DBG("ENTRY\n");
 	do {
+		*buf = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
+		if (*buf) {
+			LOG_ERR("Mem alloc Fail\n");
+		}
 		teadfs_get_lower_path(dentry, &lower_path);
 		lower_dentry = lower_path.dentry;
-
 		old_fs = get_fs();
 		set_fs(get_ds());
 		rc = lower_dentry->d_inode->i_op->readlink(lower_dentry,
-			(char __user*)buf,
+			(char __user*)(*buf),
 			PATH_MAX);
 		set_fs(old_fs);
 		if (rc < 0)
@@ -232,6 +236,22 @@ static int teadfs_readlink_lower(struct dentry* dentry, char** buf,
 	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return rc;
 }
+
+int teadfs_readlink(struct dentry* dentry, char __user* buffer, int buflen) {
+	struct dentry* lower_dentry;
+	struct path lower_path;
+	int rc;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		teadfs_get_lower_path(dentry, &lower_path);
+		lower_dentry = lower_path.dentry;
+		rc = generic_readlink(dentry, buffer, buflen);
+	} while (0);
+	teadfs_put_lower_path(dentry, &lower_path);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+}
+
 
 static void* teadfs_follow_link(struct dentry* dentry, struct nameidata* nd)
 {
@@ -351,9 +371,10 @@ static void
 teadfs_put_link(struct dentry* dentry, struct nameidata* nd, void* ptr)
 {
 	char* buf = nd_get_link(nd);
+	LOG_DBG("ENTRY\n");
 	if (!IS_ERR(buf)) {
 		/* Free the char* */
-		kfree(buf);
+		teadfs_free(buf);
 	}
 	LOG_DBG("LEAVE \n");
 }
@@ -455,7 +476,7 @@ static int teadfs_removexattr(struct dentry* dentry, const char* name)
 	return rc;
 }
 
-
+// linux file link
 static int teadfs_symlink(struct inode* dir, struct dentry* dentry,
 	const char* symname)
 {
@@ -656,7 +677,7 @@ teadfs_rename(struct inode* old_dir, struct dentry* old_dentry,
 
 
 const struct inode_operations teadfs_symlink_iops = {
-	.readlink		= generic_readlink,
+	.readlink		= teadfs_readlink,
 	.follow_link	= teadfs_follow_link,
 	.put_link		= teadfs_put_link,
 	.permission		= teadfs_permission,
