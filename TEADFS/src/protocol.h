@@ -104,6 +104,11 @@ struct teadfs_write_info {
 	struct teadfs_protocol_binary write_data;
 };
 
+struct teadfs_delete_info {
+	// file_path
+	struct teadfs_protocol_binary file_path;
+};
+
 struct teadfs_cleanup_info {
 	//unique open file, likely struct file;
 	__u64 file_id;
@@ -124,6 +129,7 @@ struct teadfs_packet_info
 		struct teadfs_release_info release;
 		struct teadfs_read_info read;
 		struct teadfs_write_info write;
+		struct teadfs_delete_info del_file;
 		struct teadfs_result_code_info code;
 		struct teadfs_cleanup_info cleanup;
 	} data;

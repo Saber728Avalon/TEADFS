@@ -3,6 +3,7 @@
 #include "user_com.h"
 #include "mem.h"
 #include "protocol.h"
+#include "file.h"
 
 #include <linux/fs.h>
 #include <linux/mm.h>
@@ -164,7 +165,184 @@ static int teadfs_readpage(struct file* file, struct page* page)
 	return rc;
 }
 
+/**
+ * ecryptfs_get_locked_page
+ *
+ * Get one page from cache or lower f/s, return error otherwise.
+ *
+ * Returns locked and up-to-date page (if ok), with increased
+ * refcnt.
+ */
+struct page* teadfs_get_locked_page(struct inode* inode, loff_t index)
+{
+	struct page* page = read_mapping_page(inode->i_mapping, index, NULL);
+	if (!IS_ERR(page))
+		lock_page(page);
+	return page;
+}
 
+
+/**
+ * teadfs_write
+ * @ecryptfs_inode: The eCryptfs file into which to write
+ * @data: Virtual address where data to write is located
+ * @offset: Offset in the eCryptfs file at which to begin writing the
+ *          data from @data
+ * @size: The number of bytes to write from @data
+ *
+ * Write an arbitrary amount of data to an arbitrary location in the
+ * eCryptfs inode page cache. This is done on a page-by-page, and then
+ * by an extent-by-extent, basis; individual extents are encrypted and
+ * written to the lower page cache (via VFS writes). This function
+ * takes care of all the address translation to locations in the lower
+ * filesystem; it also handles truncate events, writing out zeros
+ * where necessary.
+ *
+ * Returns zero on success; non-zero otherwise
+ */
+static int teadfs_write(struct dentry* dentry, struct inode* ecryptfs_inode, char* data, loff_t offset,
+	size_t size)
+{
+	struct page* ecryptfs_page;
+	char* ecryptfs_page_virt;
+	loff_t ecryptfs_file_size = i_size_read(ecryptfs_inode);
+	loff_t data_offset = 0;
+	loff_t pos;
+	int rc = 0;
+	struct file* file;
+	int flags = O_RDWR;
+
+	LOG_DBG("ENTRY\n");
+	do {
+		/*
+		 * if we are writing beyond current size, then start pos
+		 * at the current size - we'll fill in zeros from there.
+		 */
+		if (offset > ecryptfs_file_size) //文件偏移位置，超过了文件末尾.修改到文件末尾
+			pos = ecryptfs_file_size;
+		else
+			pos = offset;
+
+		file = teadfs_get_lower_file(dentry, NULL, flags);
+		if (IS_ERR(file)) {
+			rc = PTR_ERR(file);
+			LOG_ERR("%s: Error encrypting "
+				"page; rc = [%d]\n", __func__, rc);
+			break;
+		}
+		rc = kernel_write(file, data, size, pos);
+		teadfs_put_lower_file(NULL, file);
+		if (rc < 0) {
+			LOG_ERR("kernel_read error:%d\n", file, rc);
+			break;
+		}
+		pos += size;
+		if (pos > ecryptfs_file_size) {
+			i_size_write(ecryptfs_inode, pos);
+		}
+	} while (0);
+	LOG_DBG("LEVAL rc : [%d]\n", rc);
+	return rc;
+}
+
+/**
+ * truncate_upper
+ * @dentry: The ecryptfs layer dentry
+ * @ia: Address of the ecryptfs inode's attributes
+ * @lower_ia: Address of the lower inode's attributes
+ *
+ * Function to handle truncations modifying the size of the file. Note
+ * that the file sizes are interpolated. When expanding, we are simply
+ * writing strings of 0's out. When truncating, we truncate the upper
+ * inode and update the lower_ia according to the page index
+ * interpolations. If ATTR_SIZE is set in lower_ia->ia_valid upon return,
+ * the caller must use lower_ia in a call to notify_change() to perform
+ * the truncation of the lower inode.
+ *
+ * Returns zero on success; non-zero otherwise
+ */
+int truncate_upper(struct dentry* dentry, struct iattr* ia,
+	struct iattr* lower_ia) {
+	int rc = 0;
+	struct inode* inode = dentry->d_inode;
+	loff_t i_size = i_size_read(inode);
+	loff_t lower_size_before_truncate;
+	loff_t lower_size_after_truncate;
+	char* buf = NULL;
+
+	if (unlikely((ia->ia_size == i_size))) {
+		lower_ia->ia_valid &= ~ATTR_SIZE;
+		return 0;
+	}
+	do {
+		LOG_INF("resize:%lld --> %lld\n", i_size, ia->ia_size);
+		/* Switch on growing or shrinking file */
+		if (ia->ia_size > i_size) {//说明文件在扩展
+			lower_ia->ia_valid &= ~ATTR_SIZE;
+			/* Write a single 0 at the last position of the file;
+			 * this triggers code that will fill in 0's throughout
+			 * the intermediate portion of the previous end of the
+			 * file and the new and of the file */
+			buf = teadfs_zalloc(ia->ia_size - i_size, GFP_KERNEL);
+			if (!buf) {
+				LOG_ERR("Error attempting to allocate memory\n");
+				rc = -ENOMEM;
+				break;
+			}
+			memset(buf, 0, ia->ia_size - i_size);
+			rc = teadfs_write(dentry, inode, buf,
+				ia->ia_size, ia->ia_size - i_size);
+			if (rc > 0) {
+				LOG_ERR("teadfs_write Error %d\n", rc);
+				rc = 0;
+				break;
+			}
+			teadfs_free(buf);
+		} else { /* ia->ia_size < i_size_read(inode) */  //文件被截断
+		 /* We're chopping off all the pages down to the page
+		  * in which ia->ia_size is located. Fill in the end of
+		  * that page from (ia->ia_size & ~PAGE_CACHE_MASK) to
+		  * PAGE_CACHE_SIZE with zeros. */
+			truncate_setsize(inode, ia->ia_size);
+			lower_ia->ia_size = ia->ia_size;
+			lower_ia->ia_valid |= ATTR_SIZE;
+
+		}
+	} while (0);
+	return rc;
+}
+
+/**
+ * teadfs_truncate
+ * @dentry: The ecryptfs layer dentry
+ * @new_length: The length to expand the file to
+ *
+ * Simple function that handles the truncation of an eCryptfs inode and
+ * its corresponding lower inode.
+ *
+ * Returns zero on success; non-zero otherwise
+ */
+static int teadfs_truncate(struct dentry* dentry, loff_t new_length)
+{
+	struct iattr ia = { .ia_valid = ATTR_SIZE, .ia_size = new_length };
+	struct iattr lower_ia = { .ia_valid = 0 };
+	int rc;
+	struct dentry* lower_dentry;
+	struct path lower_path;
+
+	LOG_DBG("ENTRY\n");
+	teadfs_get_lower_path(dentry, &lower_path);
+	lower_dentry = lower_path.dentry;
+	rc = truncate_upper(dentry, &ia, &lower_ia);
+	if (!rc && lower_ia.ia_valid & ATTR_SIZE) {
+		mutex_lock(&lower_dentry->d_inode->i_mutex);
+		rc = notify_change(lower_dentry, &lower_ia, NULL);
+		mutex_unlock(&lower_dentry->d_inode->i_mutex);
+	}
+	teadfs_put_lower_path(dentry, &lower_path);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
+	return rc;
+}
 
 
 
@@ -194,6 +372,12 @@ static int treadfs_write_begin(struct file* file,
 	char* virt;
 	loff_t offset;
 
+	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
+	struct dentry* teadfs_dentry = file->f_path.dentry;
+
+	LOG_INF("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
+
+
 	//find page. if not exist create page.
 	page = grab_cache_page_write_begin(mapping, index, flags);
 	if (!page)
@@ -201,6 +385,7 @@ static int treadfs_write_begin(struct file* file,
 	*pagep = page;
 
 	LOG_DBG("ENTRY\n");
+
 	do {
 		prev_page_end_size = ((loff_t)index << PAGE_CACHE_SHIFT);
 		if (!PageUptodate(page)) {
@@ -227,8 +412,8 @@ static int treadfs_write_begin(struct file* file,
 		 * Note, this will increase i_size. */
 		if (index != 0) {
 			if (prev_page_end_size > i_size_read(page->mapping->host)) {
-				//rc = ecryptfs_truncate(file->f_path.dentry,
-				//	prev_page_end_size);
+				rc = teadfs_truncate(file->f_path.dentry,
+					prev_page_end_size);
 				if (rc) {
 					LOG_ERR("%s: Error on attempt to "
 						"truncate to (higher) offset [%lld];"
@@ -280,6 +465,10 @@ static int teadfs_write_end(struct file* file,
 	char* virt;
 	loff_t offset;
 
+	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
+	struct dentry* teadfs_dentry = file->f_path.dentry;
+
+	LOG_INF("ENTRY file:%px pos:%lld, len:%d, copied:%d name:%s\n", file, pos, len, copied, teadfs_dentry->d_name.name);
 
 	LOG_DBG("ENTRY\n");
 

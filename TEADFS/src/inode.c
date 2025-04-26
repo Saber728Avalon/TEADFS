@@ -6,6 +6,7 @@
 #include "file.h"
 #include "user_com.h"
 #include "mem.h"
+#include "mmap.h"
 
 #include <linux/fs.h>
 #include <linux/fs_stack.h>
@@ -159,7 +160,9 @@ static int teadfs_setattr(struct dentry* dentry, struct iattr* ia)
 		if (ia->ia_valid & ATTR_FILE)
 			lower_ia.ia_file = teadfs_file_to_lower(ia->ia_file);
 		if (ia->ia_valid & ATTR_SIZE) {
-			truncate_setsize(inode, ia->ia_size);
+			rc = truncate_upper(dentry, ia, &lower_ia);
+			if (rc < 0)
+				break;
 		}
 
 		/*
@@ -220,6 +223,7 @@ static int teadfs_readlink_lower(struct dentry* dentry, char** buf,
 		*buf = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
 		if (*buf) {
 			LOG_ERR("Mem alloc Fail\n");
+			break;
 		}
 		teadfs_get_lower_path(dentry, &lower_path);
 		lower_dentry = lower_path.dentry;
@@ -338,8 +342,9 @@ static int teadfs_unlink(struct inode* dir, struct dentry* dentry)
 	struct inode* inode = dentry->d_inode;
 	struct path lower_path;
 
-	LOG_DBG("ENTRY\n");
+	LOG_INF("ENTRY :%s\n", dentry->d_name.name);
 	do {
+
 		teadfs_get_lower_path(dentry, &lower_path);
 		lower_dentry = lower_path.dentry;
 		dget(lower_dentry);

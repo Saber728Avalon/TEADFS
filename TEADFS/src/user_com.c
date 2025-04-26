@@ -480,3 +480,8 @@ int teadfs_request_write(loff_t offset, const char* src_data, int src_size, char
 	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
+
+//delete file
+int teadfs_request_delete(struct dentry* dentry) {
+	return 0;
+}

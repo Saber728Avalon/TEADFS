@@ -111,7 +111,7 @@ void teadfs_put_lower_file(struct inode* inode, struct file* file)
 		kpid = 0;
 	}
 	//
-	if (kpid) {
+	if (kpid && inode) {
 		//check open count
 		inode_info = teadfs_inode_to_private(inode);
 		if (atomic_dec_and_mutex_lock(&inode_info->lower_file_count,
@@ -159,7 +159,7 @@ static ssize_t teadfs_aio_read_update_atime(struct kiocb *iocb,
 	struct file *file = iocb->ki_filp;
 	struct teadfs_file_info *file_info  = teadfs_file_to_private(file);
 
-	LOG_DBG("ENTRY\n");
+	LOG_DBG("ENTRY file:%px\n", file);
 	do {
 		teadfs_get_lower_path(file->f_path.dentry, &lower_path);
 		// invalidate page
@@ -193,8 +193,9 @@ static ssize_t teadfs_aio_write(struct kiocb* iocb,
 	struct path lower;
 	struct file* file = iocb->ki_filp;
 	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
+	struct dentry* teadfs_dentry = file->f_path.dentry;
 
-	LOG_DBG("ENTRY\n");
+	LOG_INF("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
 
 		//write
@@ -251,6 +252,7 @@ static ssize_t teadfs_aio_write(struct kiocb* iocb,
 
 		LOG_DBG("ENTRY name:%s\n", lower_name);
 		buf->filldir_called++;
+		//copy item to user mode buffer
 		rc = buf->filldir(buf->dirent, lower_name, lower_namelen, offset, ino, d_type);
 		if (rc >= 0)
 			buf->entries_written++;
