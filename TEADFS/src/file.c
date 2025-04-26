@@ -100,11 +100,11 @@ void teadfs_put_lower_file(struct inode* inode, struct file* file)
 	struct teadfs_inode_info* inode_info;
 	pid_t kpid = 0;
 	struct file* lower_file = teadfs_file_to_lower(file);
-	struct dentry* dentry = file->f_path.dentry;
+	struct dentry* dentry = NULL;
 	struct path lower_path;
 
 	LOG_DBG("ENTRY\n");
-	teadfs_get_lower_path(dentry, &lower_path);
+	
 	//teadfs client not lock
 	kpid = task_tgid_vnr(current);
 	if (kpid == teadfs_get_client_pid()) {
@@ -112,6 +112,8 @@ void teadfs_put_lower_file(struct inode* inode, struct file* file)
 	}
 	//
 	if (kpid && inode) {
+		dentry = file->f_path.dentry;
+		teadfs_get_lower_path(dentry, &lower_path);
 		//check open count
 		inode_info = teadfs_inode_to_private(inode);
 		if (atomic_dec_and_mutex_lock(&inode_info->lower_file_count,
@@ -130,11 +132,12 @@ void teadfs_put_lower_file(struct inode* inode, struct file* file)
 			}
 			mutex_unlock(&inode_info->lower_file_mutex);
 		}
+		teadfs_put_lower_path(dentry, &lower_path);
 	} else {
 		filemap_write_and_wait(file->f_mapping);
 		fput(lower_file);
 	}
-	teadfs_put_lower_path(dentry, &lower_path);
+	
 	LOG_DBG("LEVAL\n");
 }
 
@@ -363,7 +366,6 @@ static int teadfs_open(struct inode *inode, struct file *file)
 
 	LOG_INF("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
 	do {
-		BUG_ON(0);
 		/* Released in ecryptfs_release or end of function if failure */
 		file_info = teadfs_zalloc(sizeof(struct teadfs_file_info), GFP_KERNEL);
 		teadfs_set_file_private(file, file_info);
@@ -454,6 +456,17 @@ static int teadfs_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+
+static loff_t teadfs_file_llseek(struct file* file, loff_t offset, int whence) {
+	loff_t rc;
+	struct dentry* dentry = file->f_path.dentry;
+
+	LOG_INF("ENTRY file:%px offset:%lld  whence:%d name:%s\n", file, offset, whence, dentry->d_name.name);
+	do {
+		rc = generic_file_llseek(file, offset, whence);
+	} while (0);
+	return rc;
+}
 static int
 teadfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
@@ -547,7 +560,7 @@ const struct file_operations teadfs_dir_fops = {
 };
 
 const struct file_operations teadfs_main_fops = {
-	.llseek = generic_file_llseek,
+	.llseek = teadfs_file_llseek,
 	.read = do_sync_read,
 	.aio_read = teadfs_aio_read_update_atime,
 	.write = do_sync_write,

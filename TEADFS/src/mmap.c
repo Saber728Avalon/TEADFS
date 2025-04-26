@@ -114,6 +114,7 @@ int teadfs_write_lower(struct file* file, char* data,
 			offset += ENCRYPT_FILE_HEADER_SIZE;
 		}
 		//write data to file
+		LOG_INF("size:%d, offset:%lld\n", size, offset);
 		rc = kernel_write(file_info->lower_file, data, size, offset);
 		if (rc < 0) {
 			LOG_ERR("kernel_read error:%d\n", file, file_info->lower_file);
@@ -209,11 +210,20 @@ static int teadfs_write(struct dentry* dentry, struct inode* ecryptfs_inode, cha
 	loff_t data_offset = 0;
 	loff_t pos;
 	int rc = 0;
-	struct file* file;
 	int flags = O_RDWR;
+	struct teadfs_file_info file_info = { 0 };
+	struct file file = { 0 };
+	struct path lower_path;
+	struct dentry* lower_dentry;
+
 
 	LOG_DBG("ENTRY\n");
 	do {
+		file.f_path.dentry = dentry;
+		file.f_inode = ecryptfs_inode;
+		teadfs_get_lower_path(dentry, &lower_path);
+		lower_dentry = lower_path.dentry;
+		teadfs_set_file_private(&file, &file_info);
 		/*
 		 * if we are writing beyond current size, then start pos
 		 * at the current size - we'll fill in zeros from there.
@@ -223,15 +233,22 @@ static int teadfs_write(struct dentry* dentry, struct inode* ecryptfs_inode, cha
 		else
 			pos = offset;
 
-		file = teadfs_get_lower_file(dentry, NULL, flags);
-		if (IS_ERR(file)) {
-			rc = PTR_ERR(file);
+		file_info.access = teadfs_request_open_path(&lower_path);
+		file_info.lower_file = teadfs_get_lower_file(dentry, NULL, flags);
+		LOG_DBG("lower_file:%px, access:%d\n", file_info.lower_file, file_info.access);
+		if (IS_ERR(file_info.lower_file)) {
+			rc = PTR_ERR(file_info.lower_file);
 			LOG_ERR("%s: Error encrypting "
 				"page; rc = [%d]\n", __func__, rc);
 			break;
 		}
-		rc = kernel_write(file, data, size, pos);
-		teadfs_put_lower_file(NULL, file);
+		rc = teadfs_write_lower(&file, data, pos, size);
+		if (rc < 0) {
+			LOG_ERR("%s: Error write "
+				"page; rc = [%d]\n", __func__, rc);
+			break;
+		}
+		teadfs_put_lower_file(dentry->d_inode, &file);
 		if (rc < 0) {
 			LOG_ERR("kernel_read error:%d\n", file, rc);
 			break;
@@ -241,6 +258,7 @@ static int teadfs_write(struct dentry* dentry, struct inode* ecryptfs_inode, cha
 			i_size_write(ecryptfs_inode, pos);
 		}
 	} while (0);
+	teadfs_put_lower_path(dentry, &lower_path);
 	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
@@ -455,11 +473,7 @@ static int treadfs_write_begin(struct file* file,
 static int teadfs_write_end(struct file* file,
 	struct address_space* mapping,
 	loff_t pos, unsigned len, unsigned copied,
-	struct page* page, void* fsdata)
-{
-	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
-	unsigned from = pos & (PAGE_CACHE_SIZE - 1);
-	unsigned to = from + copied;
+	struct page* page, void* fsdata) {
 	struct inode* ecryptfs_inode = mapping->host;
 	int rc;
 	char* virt;
@@ -471,10 +485,8 @@ static int teadfs_write_end(struct file* file,
 	LOG_INF("ENTRY file:%px pos:%lld, len:%d, copied:%d name:%s\n", file, pos, len, copied, teadfs_dentry->d_name.name);
 
 	LOG_DBG("ENTRY\n");
-
-	offset = (((loff_t)page->index) << PAGE_CACHE_SHIFT);
 	virt = kmap(page);
-	rc = teadfs_write_lower(file, virt, offset, to);
+	rc = teadfs_write_lower(file, virt, pos, copied);
 	if (rc > 0)
 		rc = 0;
 	kunmap(page);
