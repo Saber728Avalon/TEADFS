@@ -134,7 +134,10 @@ void teadfs_put_lower_file(struct inode* inode, struct file* file)
 		}
 		teadfs_put_lower_path(dentry, &lower_path);
 	} else {
-		filemap_write_and_wait(file->f_mapping);
+		LOG_INF("filemap_write_and_wait r\n");
+		if (inode) {
+			filemap_write_and_wait(file->f_mapping);
+		}
 		fput(lower_file);
 	}
 	

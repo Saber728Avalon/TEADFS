@@ -349,8 +349,8 @@ static int teadfs_unlink(struct inode* dir, struct dentry* dentry)
 		lower_dentry = lower_path.dentry;
 		dget(lower_dentry);
 		lower_dir_dentry = lock_parent(lower_dentry);
-		if (0 == strcmp(dentry->d_name.name, "confdefs.h")
-			|| 0 == strcmp(dentry->d_name.name, "conftest.c")) {
+		if (0 == strcmp(dentry->d_name.name, "conftest.out")) {
+			rc = -EACCES;
 			break;
 		}
 		rc = vfs_unlink(lower_dir_inode, lower_dentry

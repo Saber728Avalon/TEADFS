@@ -122,7 +122,7 @@ static struct dentry* teadfs_mount(struct file_system_type* fs_type, int flags,
 		teadfs_set_lower_path(s->s_root, &lower_path);
 		LOG_ERR("dentry:%px mnt:%px\n", lower_path.dentry, lower_path.mnt);
 		s->s_flags |= MS_ACTIVE;
-		LOG_DBG("Mount success\n");
+		LOG_INF("Mount success\n");
 		return dget(s->s_root);
 	} while (0);
 

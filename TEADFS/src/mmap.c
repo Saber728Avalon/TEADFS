@@ -126,6 +126,7 @@ int teadfs_write_lower(struct file* file, char* data,
 	if (buf) {
 		teadfs_free(buf);
 	}
+	LOG_INF("LEVAL rc : [%d]\n", rc);
 	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;
 }
@@ -235,7 +236,7 @@ static int teadfs_write(struct dentry* dentry, struct inode* ecryptfs_inode, cha
 
 		file_info.access = teadfs_request_open_path(&lower_path);
 		file_info.lower_file = teadfs_get_lower_file(dentry, NULL, flags);
-		LOG_DBG("lower_file:%px, access:%d\n", file_info.lower_file, file_info.access);
+		LOG_INF("lower_file:%px, access:%d\n", file_info.lower_file, file_info.access);
 		if (IS_ERR(file_info.lower_file)) {
 			rc = PTR_ERR(file_info.lower_file);
 			LOG_ERR("%s: Error encrypting "
@@ -248,7 +249,8 @@ static int teadfs_write(struct dentry* dentry, struct inode* ecryptfs_inode, cha
 				"page; rc = [%d]\n", __func__, rc);
 			break;
 		}
-		teadfs_put_lower_file(dentry->d_inode, &file);
+		LOG_INF("teadfs_write_lower rc : [%d]\n", rc);
+		teadfs_put_lower_file(NULL, &file);
 		if (rc < 0) {
 			LOG_ERR("kernel_read error:%d\n", file, rc);
 			break;
@@ -257,6 +259,8 @@ static int teadfs_write(struct dentry* dentry, struct inode* ecryptfs_inode, cha
 		if (pos > ecryptfs_file_size) {
 			i_size_write(ecryptfs_inode, pos);
 		}
+		LOG_INF("pos :%lld  size : [%d]  ecryptfs_file_size:%lld\n", pos, size, ecryptfs_file_size);
+		rc = 0;
 	} while (0);
 	teadfs_put_lower_path(dentry, &lower_path);
 	LOG_DBG("LEVAL rc : [%d]\n", rc);
