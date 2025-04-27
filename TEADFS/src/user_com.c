@@ -192,6 +192,9 @@ int teadfs_request_open_file(struct file* file, struct teadfs_file_info* file_in
 		rc = teadfs_request_open(file_info->file_path, file_info->file_path_length, file);
 	} while (0);
 	LOG_INF("file:%s\n", file_info->file_path);
+	if (rc < 0) { 
+		rc = OFR_INIT; 
+	}
 	return rc;
 }
 

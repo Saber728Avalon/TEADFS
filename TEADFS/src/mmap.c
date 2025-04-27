@@ -291,7 +291,9 @@ int truncate_upper(struct dentry* dentry, struct iattr* ia,
 	loff_t lower_size_before_truncate;
 	loff_t lower_size_after_truncate;
 	char* buf = NULL;
-
+	loff_t total_truncate_size;
+	loff_t truncate_pos;
+	loff_t current_write_len;
 	if (unlikely((ia->ia_size == i_size))) {
 		lower_ia->ia_valid &= ~ATTR_SIZE;
 		return 0;
@@ -305,19 +307,26 @@ int truncate_upper(struct dentry* dentry, struct iattr* ia,
 			 * this triggers code that will fill in 0's throughout
 			 * the intermediate portion of the previous end of the
 			 * file and the new and of the file */
-			buf = teadfs_zalloc(ia->ia_size - i_size, GFP_KERNEL);
+
+			total_truncate_size = ia->ia_size - i_size;
+			buf = teadfs_zalloc(PAGE_CACHE_SIZE, GFP_KERNEL);
 			if (!buf) {
 				LOG_ERR("Error attempting to allocate memory\n");
 				rc = -ENOMEM;
 				break;
 			}
-			memset(buf, 0, ia->ia_size - i_size);
-			rc = teadfs_write(dentry, inode, buf,
-				ia->ia_size, ia->ia_size - i_size);
-			if (rc > 0) {
-				LOG_ERR("teadfs_write Error %d\n", rc);
-				rc = 0;
-				break;
+			memset(buf, 0, PAGE_CACHE_SIZE);
+			for (truncate_pos = 0; truncate_pos < total_truncate_size; truncate_pos += PAGE_CACHE_SIZE) {
+				current_write_len = total_truncate_size - truncate_pos;
+				if (current_write_len > PAGE_CACHE_SIZE) {
+					current_write_len = PAGE_CACHE_SIZE;
+				}
+				rc = teadfs_write(dentry, inode, buf,
+					ia->ia_size + truncate_pos, current_write_len);
+				if (rc < 0) {
+					LOG_ERR("teadfs_write Error %d\n", rc);
+					break;
+				}
 			}
 			teadfs_free(buf);
 		} else { /* ia->ia_size < i_size_read(inode) */  //ÎÄ¼þ±»½Ø¶Ï

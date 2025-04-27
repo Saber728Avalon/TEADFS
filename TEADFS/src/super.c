@@ -88,6 +88,7 @@ static struct inode *teadfs_alloc_inode(struct super_block *sb)
 		inode_init_once(&(inode_info->vfs_inode));
 		mutex_init(&inode_info->lower_file_mutex);
 		atomic_set(&inode_info->lower_file_count, 0);
+		inode_info->file_decrypt = 0;
 		address_space_init_once(&(inode_info->i_decrypt));
 		inode = &inode_info->vfs_inode;
 	} while (0);

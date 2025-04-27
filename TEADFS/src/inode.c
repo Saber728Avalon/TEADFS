@@ -102,8 +102,9 @@ static int teadfs_getattr(struct vfsmount* mnt, struct dentry* dentry,
 	int access = OFR_INIT;
 	struct path lower_path;
 	struct dentry* lower_dentry;
+	struct teadfs_inode_info*  inode_info = teadfs_inode_to_private(dentry->d_inode);
 
-	LOG_INF("ENTRY :%s\n", dentry->d_name.name);
+	LOG_DBG("ENTRY :%s\n", dentry->d_name.name);
 	teadfs_get_lower_path(dentry, &lower_path);
 	lower_dentry = lower_path.dentry;
 	rc = vfs_getattr(&lower_path, &lower_stat);
@@ -113,13 +114,16 @@ static int teadfs_getattr(struct vfsmount* mnt, struct dentry* dentry,
 		generic_fillattr(dentry->d_inode, stat);
 		stat->blocks = lower_stat.blocks;
 
-		access = teadfs_request_open_path(&lower_path);
-		if (OFR_DECRYPT == access) {
-			(*stat).size -= ENCRYPT_FILE_HEADER_SIZE;
+		
+		if (S_ISREG(stat->mode) && inode_info->file_decrypt) {
+			access = teadfs_request_open_path(&lower_path);
+			if (OFR_DECRYPT == access) {
+				(*stat).size -= ENCRYPT_FILE_HEADER_SIZE;
+			}
 		}
 	}
 	teadfs_put_lower_path(dentry, &lower_path);
-	LOG_INF("LEAVE rc = [%d]\n", rc);
+	LOG_DBG("LEAVE rc = [%d]\n", rc);
 	return rc;
 }
 
@@ -221,7 +225,7 @@ static int teadfs_readlink_lower(struct dentry* dentry, char** buf,
 	LOG_DBG("ENTRY\n");
 	do {
 		*buf = teadfs_zalloc(PATH_MAX, GFP_KERNEL);
-		if (*buf) {
+		if (!(*buf)) {
 			LOG_ERR("Mem alloc Fail\n");
 			break;
 		}
@@ -349,10 +353,6 @@ static int teadfs_unlink(struct inode* dir, struct dentry* dentry)
 		lower_dentry = lower_path.dentry;
 		dget(lower_dentry);
 		lower_dir_dentry = lock_parent(lower_dentry);
-		if (0 == strcmp(dentry->d_name.name, "conftest.out")) {
-			rc = -EACCES;
-			break;
-		}
 		rc = vfs_unlink(lower_dir_inode, lower_dentry
 #if defined(CONFIG_VFS_UNLINK_4_PARAM)
 			,NULL

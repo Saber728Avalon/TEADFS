@@ -382,14 +382,16 @@ static int teadfs_open(struct inode *inode, struct file *file)
 		file_info->file_path = NULL;
 		file_info->file_path_buf = NULL;
 		file_info->file_path_length = 0;
-
+		//update inode file access
+		mutex_lock(&inode_info->lower_file_mutex);
+		inode_info->file_decrypt = ((OFR_ENCRYPT == access) ? 1 : ((OFR_DECRYPT == access) ? 1 : 0)); 
+		mutex_unlock(&inode_info->lower_file_mutex);
 		if (S_ISREG(inode->i_mode)) {
 			access = teadfs_request_open_file(file, file_info);
 			if (OFR_PROHIBIT == access) {
 				rc = -EACCES;
 				break;
 			}
-			if (access <= 0) { access = OFR_INIT; }
 		}
 		//check file flag
 		flags |= file->f_flags;
@@ -455,7 +457,7 @@ static int teadfs_release(struct inode *inode, struct file *file)
 		teadfs_set_file_private(file, NULL);
 		teadfs_free(file_info);
 	}
-	LOG_INF("LEVAL\n");
+	LOG_DBG("LEVAL\n");
 	return 0;
 }
 
@@ -464,7 +466,7 @@ static loff_t teadfs_file_llseek(struct file* file, loff_t offset, int whence) {
 	loff_t rc;
 	struct dentry* dentry = file->f_path.dentry;
 
-	LOG_INF("ENTRY file:%px offset:%lld  whence:%d name:%s\n", file, offset, whence, dentry->d_name.name);
+	LOG_DBG("ENTRY file:%px offset:%lld  whence:%d name:%s\n", file, offset, whence, dentry->d_name.name);
 	do {
 		rc = generic_file_llseek(file, offset, whence);
 	} while (0);

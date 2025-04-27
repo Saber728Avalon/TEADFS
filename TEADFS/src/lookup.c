@@ -189,15 +189,10 @@ struct dentry* teadfs_lookup(struct inode* ecryptfs_dir_inode,
 				dentry->d_name.name);
 			break;
 		}
-		if (lower_dentry->d_inode) {
-			LOG_ERR("Find d_inode \n");
-			break;
-		}
-		dput(lower_dentry);
+		rc = teadfs_lookup_interpose(dentry, lower_dentry,
+			ecryptfs_dir_inode);
 	} while (0);
-	rc = teadfs_lookup_interpose(dentry, lower_dentry,
-		ecryptfs_dir_inode);
-
+	
 	dput(parent);
 	teadfs_put_lower_path(parent, &lower_parent_path);
 	LOG_DBG("LEAVE rc = [%d]\n", rc);

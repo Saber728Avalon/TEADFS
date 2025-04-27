@@ -48,6 +48,7 @@ struct teadfs_inode_info {
 	//double buffer, decrypt data
 	struct address_space i_decrypt;
 	atomic_t lower_file_count;
+	int file_decrypt;
 };
 
 
