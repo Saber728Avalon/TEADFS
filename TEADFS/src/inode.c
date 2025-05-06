@@ -630,6 +630,7 @@ teadfs_rename(struct inode* old_dir, struct dentry* old_dentry,
 
 	LOG_DBG("ENTRY\n");
 	do {
+		LOG_INF("rename: %s --> %s\n", old_dentry->d_name.name, new_dentry->d_name.name)
 		teadfs_get_lower_path(old_dentry, &lower_old_path);
 		lower_old_dentry = lower_old_path.dentry;
 		teadfs_get_lower_path(new_dentry, &lower_new_path);

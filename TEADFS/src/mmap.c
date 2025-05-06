@@ -32,6 +32,7 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 	struct teadfs_file_info* file_info;
 	int rc = 0;
 	int encrypt_len = 0;
+	struct dentry* dentry = file->f_path.dentry;
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -49,6 +50,7 @@ int teadfs_read_lower(char* data, loff_t offset, size_t size,
 			LOG_ERR("kernel_read error:%d\n", file, file_info->lower_file);
 			break;
 		}
+		LOG_INF("size:%d, offset:%lld  rc:%d %s\n", size, offset, rc, dentry->d_name.name);
 		//encrypt file, will send to user mode
 		if (OFR_DECRYPT == file_info->access) {
 			encrypt_len = teadfs_request_read(offset, data, rc, data, size);
@@ -83,6 +85,7 @@ int teadfs_write_lower(struct file* file, char* data,
 	ssize_t rc;
 	int encrypt_len = 0;
 	char* buf = NULL;
+	struct dentry* dentry = file->f_path.dentry;
 
 	LOG_DBG("ENTRY\n");
 	do {
@@ -114,7 +117,7 @@ int teadfs_write_lower(struct file* file, char* data,
 			offset += ENCRYPT_FILE_HEADER_SIZE;
 		}
 		//write data to file
-		LOG_INF("size:%d, offset:%lld\n", size, offset);
+		LOG_INF("size:%d, offset:%lld %s\n", size, offset, dentry->d_name.name);
 		rc = kernel_write(file_info->lower_file, data, size, offset);
 		if (rc < 0) {
 			LOG_ERR("kernel_read error:%d\n", file, file_info->lower_file);
@@ -491,6 +494,7 @@ static int teadfs_write_end(struct file* file,
 	int rc;
 	char* virt;
 	loff_t offset;
+	loff_t start;
 
 	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
 	struct dentry* teadfs_dentry = file->f_path.dentry;
@@ -498,19 +502,28 @@ static int teadfs_write_end(struct file* file,
 	LOG_INF("ENTRY file:%px pos:%lld, len:%d, copied:%d name:%s\n", file, pos, len, copied, teadfs_dentry->d_name.name);
 
 	LOG_DBG("ENTRY\n");
-	virt = kmap(page);
-	rc = teadfs_write_lower(file, virt, pos, copied);
-	if (rc > 0)
-		rc = 0;
-	kunmap(page);
-	if (!rc) {
-		rc = copied;
-		fsstack_copy_inode_size(ecryptfs_inode,
-			teadfs_inode_to_lower(ecryptfs_inode));
-	}
 
-	unlock_page(page);
-	page_cache_release(page);
+	do {
+
+		start = pos & (PAGE_CACHE_SIZE - 1);
+		if (unlikely(copied < len)) {
+			if (!PageUptodate(page))
+				copied = 0;
+		}
+		virt = kmap(page);
+		rc = teadfs_write_lower(file, virt + start, pos, copied);
+		if (rc > 0)
+			rc = 0;
+		kunmap(page);
+		if (!rc) {
+			rc = copied;
+			fsstack_copy_inode_size(ecryptfs_inode,
+				teadfs_inode_to_lower(ecryptfs_inode));
+		}
+
+		unlock_page(page);
+		page_cache_release(page);
+	} while (0);
 
 	LOG_DBG("LEVAL rc : [%d]\n", rc);
 	return rc;

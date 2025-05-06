@@ -199,9 +199,9 @@ static ssize_t teadfs_aio_write(struct kiocb* iocb,
 	struct path lower;
 	struct file* file = iocb->ki_filp;
 	struct teadfs_file_info* file_info = teadfs_file_to_private(file);
-	struct dentry* teadfs_dentry = file->f_path.dentry;
+	struct dentry* dentry = file->f_path.dentry;
 
-	LOG_INF("ENTRY file:%px name:%s\n", file, teadfs_dentry->d_name.name);
+	LOG_INF("ENTRY file:%px name:%s\n", file, dentry->d_name.name);
 	do {
 
 		//write

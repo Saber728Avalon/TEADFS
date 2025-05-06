@@ -3,6 +3,9 @@
 
 #include <linux/version.h>
 
+#if defined(RHEL_MAJOR) //linux release is centos
+	#define RELEASE_KERNEL_CENTOS
+#endif
 //
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 11, 0)
 	#define CONFIG_BDICONFIG_BDI

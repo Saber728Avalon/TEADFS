@@ -176,6 +176,9 @@ MODULE_ALIAS_FS("teadfs");
 
 static int __init teadfs_module_init(void) {
     int rc;
+
+	teadfs_log_create();
+
     LOG_DBG("ENTRY\n");
     do {
         rc = register_filesystem(&teadfs_fs_type);
@@ -191,6 +194,8 @@ static int __init teadfs_module_init(void) {
 
 		// check client is connect ?
 		teadfs_init_miscdev();
+
+		
     } while (0);
     LOG_DBG("LEVAL\n");
     return 0;
@@ -204,6 +209,8 @@ static void __exit teadfs_module_exit(void) {
 
 	teadfs_destroy_miscdev();
     LOG_DBG("LEVAL\n");
+
+	teadfs_log_release();
 }
 
 
